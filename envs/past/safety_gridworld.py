@@ -1,4 +1,7 @@
 """
+
+OBTAINED FORM THE WORK: https://github.com/hercky/cmdps_via_bvf
+
 Creates the map as in Safe Lyp RL paper
 
 Main code from here: https://github.com/junhyukoh/value-prediction-network/blob/master/maze.py
