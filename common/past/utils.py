@@ -13,9 +13,8 @@ from rllab.misc import ext
 from envs.custom_mujoco.point_gather import PointGatherEnv
 from envs.custom_mujoco.halfcheetah_speedlimit import SafeCheetahEnv
 from envs.rllib_mujoco.circle.point_env_safe import SafePointEnv
-from envs.grid.safety_gridworld import PitWorld
 """
-
+from envs.past.grid.safety_gridworld import PitWorld
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state',
                                        'done',))
 

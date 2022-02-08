@@ -8,7 +8,7 @@ import random
 
 from torch.utils.tensorboard import SummaryWriter
 
-from common.utils import *
+from common.past.utils import *
 
 
 class BasePGAgent(object):

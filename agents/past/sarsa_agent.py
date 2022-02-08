@@ -70,6 +70,8 @@ class SarsaAgent(object):
             return _thunk
 
         envs = [make_env() for i in range(self.args.num_envs)]
+
+
         self.envs = SubprocVecEnv(envs)
 
 
