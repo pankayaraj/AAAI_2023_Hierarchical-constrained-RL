@@ -12,16 +12,16 @@ import gym
 import copy
 
 
-from common.utils import *
+from common.past.utils import *
 
-from common.multiprocessing_envs import SubprocVecEnv
+from common.past.multiprocessing_envs import SubprocVecEnv
 from torchvision.transforms import ToTensor
 
 
-from models.grid_model import OneHotDQN
+from models.past.grid_model import OneHotDQN
 
 
-from common.schedules import LinearSchedule, ExponentialSchedule
+from common.past.schedules import LinearSchedule, ExponentialSchedule
 
 class SarsaAgent(object):
 

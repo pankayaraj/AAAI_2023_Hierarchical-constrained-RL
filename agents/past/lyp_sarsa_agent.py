@@ -24,7 +24,7 @@ from models.past.grid_model import DQN, OneHotDQN, miniDQN, OneHotValueNetwork
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
-class SafeSarsaAgent(object):
+class LypSarsaAgent(object):
 
     def __init__(self,
                  args,
@@ -42,7 +42,7 @@ class SafeSarsaAgent(object):
 
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
 
-        # set the random seed in the main launcher
+        # set the random seed the same as the main launcher
         random.seed(self.args.seed)
         torch.manual_seed(self.args.seed)
         np.random.seed(self.args.seed)
@@ -57,24 +57,21 @@ class SafeSarsaAgent(object):
 
             # create more networks here
             self.cost_model = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
-            self.review_model = OneHotValueNetwork(self.state_dim).to(self.device)
 
             self.target_cost_model = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
-            self.target_review_model = OneHotValueNetwork(self.state_dim).to(self.device)
 
             self.target_cost_model.load_state_dict(self.cost_model.state_dict())
-            self.target_review_model.load_state_dict(self.review_model.state_dict())
         else:
-            raise Exception("Not implemented yet!")
+            raise Exception("what kind of DQN env is this?")
+
 
         # copy parameters
         self.dqn_target.load_state_dict(self.dqn.state_dict())
 
         self.optimizer = torch.optim.Adam(self.dqn.parameters(), lr=self.args.lr)
-        self.review_optimizer = optim.Adam(self.review_model.parameters(), lr=self.args.cost_reverse_lr)
         self.critic_optimizer = optim.Adam(self.cost_model.parameters(), lr=self.args.cost_q_lr)
 
-        # parallel agents
+        # make the envs
         def make_env():
             def _thunk():
                 env = create_env(args)
@@ -126,6 +123,8 @@ class SafeSarsaAgent(object):
 
         return action
 
+
+
     def safe_deterministic_pi(self, state,  current_cost=0.0, greedy_eval=False):
         """
         take the action based on the current policy
@@ -138,15 +137,19 @@ class SafeSarsaAgent(object):
 
                 # Q_D(s,a)
                 cost_q_val = self.cost_model(state)
-                cost_r_val = self.review_model(state)
+
+                max_q_val = cost_q_val.max(1)[0].unsqueeze(1)
 
                 # find the action set
+                epsilon = (1 - self.args.gamma) * (self.args.d0 - current_cost)
+
                 # create the filtered mask here
-                constraint_mask = torch.le(cost_q_val + cost_r_val, self.args.d0 + current_cost).float()
+                constraint_mask = torch.le(cost_q_val , epsilon + max_q_val).float()
 
                 filtered_Q = (q_value + 1000.0) * (constraint_mask)
 
                 filtered_action = filtered_Q.max(1)[1].cpu().numpy()
+
 
                 # alt action to take if infeasible solution
                 # minimize the cost
@@ -162,6 +165,7 @@ class SafeSarsaAgent(object):
             else:
                 # create an array of random indices, for all the environments
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+
 
         return action
 
@@ -224,7 +228,9 @@ class SafeSarsaAgent(object):
         # reset state and env
         state = self.envs.reset()
         prev_state = torch.FloatTensor(state).to(self.device)
-        current_cost = torch.zeros(self.args.num_envs,1).float().to(self.device)
+        tensor_state = torch.FloatTensor(state).to(self.device)
+
+        current_cost = self.cost_model(tensor_state).max(1)[0].unsqueeze(1)
 
         ep_reward = 0
         ep_len = 0
@@ -254,20 +260,17 @@ class SafeSarsaAgent(object):
 
                 state = torch.FloatTensor(state).to(self.device)
 
-                # get the action
+                # get the expl action
                 action = self.safe_deterministic_pi(state, current_cost= current_cost)
                 next_state, reward, done, info = self.envs.step(action)
 
                 # convert it back to tensor
                 action = torch.LongTensor(action).unsqueeze(1).to(self.device)
-
                 q_values = self.dqn(state)
                 Q_value = q_values.gather(1, action)
 
                 c_q_values = self.cost_model(state)
                 cost_q_val = c_q_values.gather(1, action)
-
-                cost_r_val = self.review_model(state)
 
                 # logging mode for only agent 1
                 ep_reward += reward[0]
@@ -275,7 +278,6 @@ class SafeSarsaAgent(object):
 
 
                 values.append(Q_value)
-                c_r_vals.append(cost_r_val)
                 c_q_vals.append(cost_q_val)
                 rewards.append(torch.FloatTensor(reward).unsqueeze(1).to(self.device))
                 done_masks.append(torch.FloatTensor(1.0 - done).unsqueeze(1).to(self.device))
@@ -286,14 +288,18 @@ class SafeSarsaAgent(object):
                 states.append(state)
                 actions.append(action)
 
-                # update the state
+                # update the costs
                 prev_state = state
                 state = next_state
 
                 # update the current cost
                 # if done flag is true for the current env, this implies that the next_state cost = 0.0
                 # because the agent starts with 0.0 cost (or doesn't have access to it anyways)
-                current_cost = torch.FloatTensor([(ci[self.cost_indicator] * (1.0 - di)) for ci,di in zip(info, done)]).unsqueeze(1).to(self.device)
+                # this is V_{D}(x_0) for Lyapnuv agent
+                tensor_state = torch.FloatTensor(state).to(self.device)
+                next_cost = self.cost_model(tensor_state).max(1)[0].unsqueeze(1).detach()
+                cost_mask = torch.FloatTensor(1.0 - done).unsqueeze(1).to(self.device)
+                current_cost = ((1.0 - cost_mask) * next_cost + cost_mask * current_cost).detach()
 
                 self.total_steps += (1 * self.args.num_envs)
 
@@ -337,9 +343,6 @@ class SafeSarsaAgent(object):
 
 
 
-
-
-
             # break here
             if self.num_episodes >= self.args.num_episodes:
                 break
@@ -379,17 +382,6 @@ class SafeSarsaAgent(object):
             cost_critic_loss.backward()
             self.critic_optimizer.step()
 
-            # For the constraints (reverse)
-            prev_value = self.review_model(prev_states[0])
-
-            c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints, begin_masks)
-            C_r_targets = torch.cat(c_r_targets).detach()
-            C_r_vals = torch.cat(c_r_vals)
-
-            cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
-            self.review_optimizer.zero_grad()
-            cost_review_loss.backward()
-            self.review_optimizer.step()
 
 
 
@@ -416,12 +408,12 @@ class SafeSarsaAgent(object):
                 ep_constraint = 0
                 ep_len = 0
                 start_time = time.time()
-                current_cost = torch.FloatTensor([0.0]).to(self.device).unsqueeze(0)
+
+                state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+                current_cost = self.cost_model(state).max(1)[0].unsqueeze(1)
 
                 while not done:
 
-                    # convert the state to tensor
-                    state =  torch.FloatTensor(state).to(self.device).unsqueeze(0)
 
                     # get the policy action
                     action = self.safe_deterministic_pi(state, current_cost=current_cost, greedy_eval=True)[0]
@@ -435,7 +427,8 @@ class SafeSarsaAgent(object):
 
                     # update the state
                     state = next_state
-                    current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).to(self.device).unsqueeze(0)
+
+                    state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
 
 
                 avg_reward.append(ep_reward)
@@ -445,16 +438,14 @@ class SafeSarsaAgent(object):
 
     def save_models(self):
         """create results dict and save"""
+        torch.save(self.results_dict, os.path.join(self.args.out, 'results_dict.pt'))
         models = {
             "dqn" : self.dqn.state_dict(),
             "cost_model" : self.cost_model.state_dict(),
-            "review_model" : self.review_model.state_dict(),
             "env" : copy.deepcopy(self.eval_env),
         }
         torch.save(models,os.path.join(self.args.out, 'models.pt'))
 
-        # save the results
-        torch.save(self.results_dict, os.path.join(self.args.out, 'results_dict.pt'))
 
 
     def load_models(self):
