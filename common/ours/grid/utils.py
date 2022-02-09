@@ -64,6 +64,11 @@ class Goal_Space():
 
         return torch(current_state, goal_state)
 
+    def covert_value_to_hot_vec(self, goal):
+        value = self.goal_space[goal]
+        return convert_value_to_hot_vec(value, self.grid_size)
+
+
 
 """
 G = Goal_Space([1,10], 9)

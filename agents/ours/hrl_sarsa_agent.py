@@ -180,7 +180,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         while self.num_episodes < self.args.num_episodes:
 
-            values_u      = []
+
 
             states_u      = []
             actions_u     = []
@@ -190,10 +190,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             done_masks  = []
             constraints = []
 
+            values_upper = []
+            rewards_upper= []
+            done_masks   = []
+
             for n_u in range(self.args.traj_len_u):
 
                 state = torch.FloatTensor(state).to(device=self.device)
                 goal = self.pi_meta(state=state)
+
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                q_values_upper = self.dqn_meta(state)
+                Q_value_upper = q_values_upper.gather(1, goal)
 
                 #an indicator that is used to terminate the lower level episode
                 t_lower = 0
@@ -207,7 +215,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     values_lower     = []
                     done_masks_lower = []
                     for n_l in range(self.args.traj_len_u):
-                        action = self.pi_lower(state=state, goal=goal)
+
+                        goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+
+                        action = self.pi_lower(state=state, goal=goal_hot_vec)
                         next_state, reward, done, info = self.envs.step(actions=action)
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal)
@@ -215,7 +226,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
                         R += reward
 
-                        q_values_lower = self.dqn_lower(state)
+                        q_values_lower = self.dqn_lower(state=state, goal=goal_hot_vec)
                         Q_value_lower = q_values_lower.gather(1, action)
 
 
@@ -234,7 +245,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     next_state = torch.FloatTensor(next_state).to(self.device)
                     next_action = self.pi_lower(next_state)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
-                    next_values = self.dqn_lower(next_state)
+                    next_values = self.dqn_lower(state=next_state, goal=goal_hot_vec)
                     Next_Value = next_values.gather(1, next_action)
 
                     target_Q_values_lower = self.compute_n_step_returns(Next_Value, instrinc_rewards, done_masks_lower)
@@ -248,10 +259,15 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     self.optimizer_lower.step()
 
 
-                done = done
 
-                
 
+                values_upper.append(Q_value_upper)
                 rewards.append(reward)
                 done_masks.append(done)
+
+
+            next_action = self.pi_meta(next_state)
+            next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
+
+
 
