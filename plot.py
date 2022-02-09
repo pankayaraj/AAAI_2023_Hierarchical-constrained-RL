@@ -1,4 +1,4 @@
 import torch
 
-a = torch.load("results/grid/safe_sarsa/c1")
+a = torch.load("results/grid/safe_sarsa/r1")
 print(a)

@@ -11,7 +11,7 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa/")
+    parser.add_argument('--save_dir', type=str, default="results/grid/sarsa/")
     parser.add_argument('--exp_no', type=str, default="4")
 
     parser.add_argument('--env-name', default='pg',
