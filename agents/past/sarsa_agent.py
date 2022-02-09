@@ -74,7 +74,6 @@ class SarsaAgent(object):
 
         self.envs = SubprocVecEnv(envs)
 
-
         # create epsilon and beta schedule
         # NOTE: hardcoded for now
         self.eps_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
@@ -267,7 +266,6 @@ class SarsaAgent(object):
 
             # calculate targets here
             next_state = torch.FloatTensor(next_state).to(self.device)
-
             next_q_values = self.dqn(next_state)
             next_action = self.pi(next_state)
             next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)

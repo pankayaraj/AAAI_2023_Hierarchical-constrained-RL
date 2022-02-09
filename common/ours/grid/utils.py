@@ -48,7 +48,7 @@ class Goal_Space():
         print(current_value, goal_value)
         if self.intrinsic_reward_type == "eculidian distance":
             f = euclidian_distance(current_value, goal_value, self.grid_size)
-            return f
+            return -f
         else:
             raise Exception("Not Implemented")
 

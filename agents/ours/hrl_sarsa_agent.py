@@ -84,17 +84,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         envs = [make_env() for i in range(self.args.num_envs)]
         self.envs = SubprocVecEnv(envs)
 
-
+        self.total_steps = 0
+        self.total_lower_time_steps = 0
+        self.total_meta_time_steps = 0
+        self.num_episodes = 0
 
         #different epsilon for different levels
         self.eps_u_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
+        #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
-        self.eps_l = self.eps_l_decay.value(self.total_steps)
-
-        self.total_steps = 0
-        self.num_episodes = 0
+        self.eps_l = self.eps_l_decay.value(self.total_lower_time_step)
 
         # for storing resutls
         self.results_dict = {
@@ -109,3 +110,112 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
+
+    def pi_meta(self, state, greedy_eval=False):
+        """
+        choose goal based on the current policy
+        """
+        with torch.no_grad():
+            # to choose random goal or not
+            if (random.random() > self.eps_u_decay.value(self.total_steps)) or greedy_eval:
+                q_value = self.dqn_meta(state)
+                # chose the max/greedy actions
+                goal = q_value.max(1)[1].cpu().numpy()
+            else:
+                goal = np.random.randint(0, high=self.goal_dim, size = (self.args.num_envs, ))
+
+        return goal
+
+    def pi_lower(self, state, goal, greedy_eval=False):
+        """
+        take the action based on the current policy
+        """
+        state_goal = torch.cat((state, goal), dim=1)
+
+        with torch.no_grad():
+            # to take random action or not
+            if (random.random() > self.eps_l_decay.value(self.total_lower_time_steps)) or greedy_eval:
+                q_value = self.dqn_lower(state_goal)
+                # chose the max/greedy actions
+                action = q_value.max(1)[1].cpu().numpy()
+            else:
+                action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+        return action
+
+
+    def compute_n_step_returns(self, next_value, rewards, masks):
+        """
+        n-step SARSA returns
+        """
+        R = next_value
+        returns = []
+        for step in reversed(range(len(rewards))):
+            R = rewards[step] + self.args.gamma * R * masks[step]
+            returns.insert(0, R)
+
+        return returns
+
+    def run(self):
+        """
+        Learning happens here
+        """
+        self.total_steps = 0
+        self.total_lower_time_steps = 0
+        self.total_meta_time_steps = 0
+        self.eval_steps = 0
+
+        # reset state and env
+        # reset exploration porcess
+        state = self.envs.reset()
+        prev_state = state
+
+        ep_reward = 0 #R
+        ep_len = 0
+        ep_constraint = 0
+        start_time = time.time()
+
+        while self.num_episodes < self.args.num_episodes:
+
+            values_u      = []
+
+            states_u      = []
+            actions_u     = []
+            prev_states_u = []
+
+            rewards     = []
+            done_masks  = []
+            constraints = []
+
+            for n_u in range(args.traj-len_u):
+
+                state = torch.FloatTensor(state).to(device=self.device)
+                goal = self.pi_meta(state=state)
+
+                t_lower = 0
+
+                F = 0
+
+
+                while t_lower <=  args.max-ep-len_l:
+                    instrinc_rewards = []  # for low level n-step
+                    values_lower     = []
+                    done_masks_lower = []
+                    for n_l in range(args.traj-len_u):
+                        action = self.pi_lower(state=state, goal=goal)
+                        next_state, reward, done, info = self.envs.step(actions=action)
+                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
+                                                                 goal_state=goal)
+
+
+
+
+                        q_values = self.dqn_lower(state)
+                        Q_value = q_values.gather(1, action)
+
+
+                        values_lower.append(Q_value)
+                        instrinc_rewards.append(torch.FloatTensor(instrinc_reward).unsqueeze(1).to(device=self.device))
+                        done_masks_lower.append(torch.FloatTensor(1 - done).unsqueeze(1).to(self.device))
+
+
+                    t_lower += 1
