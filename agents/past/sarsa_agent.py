@@ -32,6 +32,8 @@ class SarsaAgent(object):
         """
         init the agent here
         """
+
+
         self.eval_env = copy.deepcopy(env)
         self.args = args
 
@@ -236,6 +238,7 @@ class SarsaAgent(object):
                         ep_constraint = 0
 
                     self.num_episodes += 1
+
 
                     # eval the policy here after eval_every steps
                     if self.num_episodes  % self.args.eval_every == 0:

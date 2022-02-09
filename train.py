@@ -105,13 +105,14 @@ freeze_support()
 if args.agent == "sarsa":
     agent = SarsaAgent(args, env, writer=tb_writer)
 elif args.agent == "bvf-sarsa":
-    agent = SafeSarsaAgent(args, env, writer=tb_writer)
+    agent = SafeSarsaAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "lyp-sarsa":
     agent = LypSarsaAgent(args, env, writer=tb_writer)
 else:
     raise Exception("Not implemented yet")
 
 
+print("experiment_numer " + str(args.exp_no))
 # start the run process here
 
 agent.run()

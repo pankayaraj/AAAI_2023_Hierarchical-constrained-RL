@@ -11,6 +11,9 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa/")
+    parser.add_argument('--exp_no', type=str, default="4")
+
     parser.add_argument('--env-name', default='pg',
                         help="pg: point gather env\n"\
                              "cheetah: safe-cheetah env\n"\
@@ -71,7 +74,7 @@ def get_args():
     # Training arguments
     parser.add_argument('--num-steps', type=int, default=int(1e4),
                         help="number of steps to train the agent")
-    parser.add_argument('--num-episodes', type=int, default=int(1e5),
+    parser.add_argument('--num-episodes', type=int, default=int(5e4),
                         help="number of episodes to train the agetn")
     parser.add_argument('--max-ep-len', type=int, default=int(15),
                         help="number of steps in an episode")
