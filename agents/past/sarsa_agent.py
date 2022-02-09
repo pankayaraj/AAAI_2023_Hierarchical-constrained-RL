@@ -201,6 +201,7 @@ class SarsaAgent(object):
                 # convert it back to tensor
                 action = torch.LongTensor(action).unsqueeze(1).to(self.device)
 
+
                 q_values = self.dqn(state)
                 Q_value = q_values.gather(1, action)
 
