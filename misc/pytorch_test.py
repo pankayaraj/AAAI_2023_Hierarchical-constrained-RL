@@ -13,7 +13,7 @@ env = PitWorld(size = 14,
                 one_hot_features=True,
                 rand_goal=True,)
 state = env.reset()
-
+print(np.concatenate((state, state)).shape)
 
 
 cost = np.array([10.0, 10.0, 10.0]).transpose()
