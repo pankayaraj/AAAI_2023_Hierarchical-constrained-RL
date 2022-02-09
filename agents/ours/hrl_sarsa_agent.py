@@ -73,7 +73,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.optimizer_meta = torch.optim.Adam(self.dqn_meta.parameters(), lr=self.args.lr)
         self.optimizer_lower = torch.optim.Adam(self.dqn_lower.parameters(), lr=self.args.lr)
 
-        # for actors
+        """
         def make_env():
             def _thunk():
                 env = create_env(args)
@@ -83,6 +83,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         envs = [make_env() for i in range(self.args.num_envs)]
         self.envs = SubprocVecEnv(envs)
+        """
+
+        #for the time being let's skip the vectorized environment's added complexity in HRL
+        self.env = create_env(args)
 
         self.total_steps = 0
         self.total_lower_time_steps = 0
@@ -169,7 +173,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         state = self.envs.reset()
         prev_state = state
 
-        ep_reward = 0 #R
+        ep_reward = 0
         ep_len = 0
         ep_constraint = 0
         start_time = time.time()
@@ -186,36 +190,68 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             done_masks  = []
             constraints = []
 
-            for n_u in range(args.traj-len_u):
+            for n_u in range(self.args.traj_len_u):
 
                 state = torch.FloatTensor(state).to(device=self.device)
                 goal = self.pi_meta(state=state)
 
+                #an indicator that is used to terminate the lower level episode
                 t_lower = 0
 
-                F = 0
+                eps_reward_lower = 0
+                R = 0
 
-
-                while t_lower <=  args.max-ep-len_l:
+                #this will terminate of the current lower level episoded went beyond limit
+                while t_lower <=  self.args.max_ep_len_l:
                     instrinc_rewards = []  # for low level n-step
                     values_lower     = []
                     done_masks_lower = []
-                    for n_l in range(args.traj-len_u):
+                    for n_l in range(self.args.traj_len_u):
                         action = self.pi_lower(state=state, goal=goal)
                         next_state, reward, done, info = self.envs.step(actions=action)
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal)
+                        done_l = self.G.validate(current_state=next_state, goal_state=goal)
+
+                        R += reward
+
+                        q_values_lower = self.dqn_lower(state)
+                        Q_value_lower = q_values_lower.gather(1, action)
 
 
-
-
-                        q_values = self.dqn_lower(state)
-                        Q_value = q_values.gather(1, action)
-
-
-                        values_lower.append(Q_value)
+                        values_lower.append(Q_value_lower)
                         instrinc_rewards.append(torch.FloatTensor(instrinc_reward).unsqueeze(1).to(device=self.device))
-                        done_masks_lower.append(torch.FloatTensor(1 - done).unsqueeze(1).to(self.device))
+                        done_masks_lower.append(torch.FloatTensor(1 - done_l).unsqueeze(1).to(self.device))
+
+                        t_lower += 1
+
+                        state = next_state
+                        #break if goal is current_state or the if the main episode terminated
+                        if done or done_l:
+                            break
 
 
-                    t_lower += 1
+                    next_state = torch.FloatTensor(next_state).to(self.device)
+                    next_action = self.pi_lower(next_state)
+                    next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
+                    next_values = self.dqn_lower(next_state)
+                    Next_Value = next_values.gather(1, next_action)
+
+                    target_Q_values_lower = self.compute_n_step_returns(Next_Value, instrinc_rewards, done_masks_lower)
+                    Q_targets_lower = torch.cat(target_Q_values_lower).detach()
+                    Q_values_lower = torch.cat(values_lower)
+
+                    loss_lower = F.mse_loss(Q_values_lower, Q_targets_lower)
+
+                    self.optimizer_lower.zero_grad()
+                    loss_lower.backwad()
+                    self.optimizer_lower.step()
+
+
+                done = done
+
+                
+
+                rewards.append(reward)
+                done_masks.append(done)
+

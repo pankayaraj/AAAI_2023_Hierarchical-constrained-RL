@@ -56,6 +56,14 @@ class Goal_Space():
         #get the corresponding goal for the discrete action
         return convert_value_to_hot_vec(self.goal_space[action], self.grid_size)
 
+    def validate(self, current_state, goal_state):
+        if type(current_state) != torch.Tensor:
+            current_state = torch.Tensor(current_state)
+        if type(goal_state) != torch.Tensor:
+            goal_state = torch.Tensor(goal_state)
+
+        return torch(current_state, goal_state)
+
 
 """
 G = Goal_Space([1,10], 9)

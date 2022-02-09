@@ -45,8 +45,8 @@ def get_args():
     parser.add_argument('--ppo-updates', type=int, default=1, help='num of ppo updates to do')
     parser.add_argument('--gae', type=float, default=0.95, help='GAE coefficient')
     parser.add_argument('--clip', type=float, default=0.2, help='clipping param for PPO')
-    parser.add_argument('--traj-len_u', type=int, default= 1, help="upper level's maximum length of the trajectory for an update")
-    parser.add_argument('--traj-len_l', type=int, default=10,
+    parser.add_argument('--traj_len_u', type=int, default= 1, help="upper level's maximum length of the trajectory for an update")
+    parser.add_argument('--traj_len_l', type=int, default=10,
                         help="lower level's maximum length of the trajectory for an update")
 
     parser.add_argument('--early-stop', action='store_true',
@@ -77,9 +77,9 @@ def get_args():
     parser.add_argument('--num-episodes', type=int, default=int(1e4),
                         help="number of episodes to train the agetn")
 
-    parser.add_argument('--max-ep-len_u', type=int, default=int(5),
+    parser.add_argument('--max_ep_len_u', type=int, default=int(5),
                         help="number of steps in an episode")
-    parser.add_argument('--max-ep-len_l', type=int, default=int(40),
+    parser.add_argument('--max_ep_len_l', type=int, default=int(40),
                         help="number of steps in an episode")
 
     # Evaluation arguments

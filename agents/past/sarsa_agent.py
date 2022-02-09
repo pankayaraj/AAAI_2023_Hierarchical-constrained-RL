@@ -40,7 +40,7 @@ class SarsaAgent(object):
         self.action_dim = env.action_space.n
 
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
-
+        print(self.args.gpu)
         # set the same random seed in the main launcher
         random.seed(self.args.seed)
         torch.manual_seed(self.args.seed)
