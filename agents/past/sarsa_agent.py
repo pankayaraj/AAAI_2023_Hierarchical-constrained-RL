@@ -28,11 +28,19 @@ class SarsaAgent(object):
     def __init__(self,
                  args,
                  env,
-                 writer = None):
+                 writer = None,
+                 save_dir=None,
+                 exp_no=None
+                 ):
         """
         init the agent here
         """
 
+        self.r_path = save_dir + "r" + exp_no
+        self.c_path = save_dir + "c" + exp_no
+
+        self.EVAL_REWARDS = []
+        self.EVAL_CONSTRAINTS = []
 
         self.eval_env = copy.deepcopy(env)
         self.args = args
@@ -243,6 +251,13 @@ class SarsaAgent(object):
                     # eval the policy here after eval_every steps
                     if self.num_episodes  % self.args.eval_every == 0:
                         eval_reward, eval_constraint = self.eval()
+
+                        self.EVAL_REWARDS.append(eval_reward)
+                        self.EVAL_CONSTRAINTS.append(eval_constraint)
+
+                        torch.save(self.EVAL_REWARDS, self.r_path)
+                        torch.save(self.EVAL_CONSTRAINTS, self.c_path)
+
                         self.results_dict["eval_rewards"].append(eval_reward)
                         self.results_dict["eval_constraints"].append(eval_constraint)
 

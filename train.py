@@ -103,7 +103,7 @@ from multiprocessing import freeze_support, set_start_method
 freeze_support()
 #  SARSA based agent
 if args.agent == "sarsa":
-    agent = SarsaAgent(args, env, writer=tb_writer)
+    agent = SarsaAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "bvf-sarsa":
     agent = SafeSarsaAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "lyp-sarsa":
