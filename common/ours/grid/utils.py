@@ -68,6 +68,12 @@ class Goal_Space():
         value = self.goal_space[goal]
         return convert_value_to_hot_vec(value, self.grid_size)
 
+    def convert_value_to_coordinates(self, value):
+        return convert_int_to_coordinates(value, self.grid_size)
+
+    def convert_cooridnates_to_value(self, x, y):
+        return convert_coordinated_into_int(x, y, self.grid_size)
+
 
 
 """

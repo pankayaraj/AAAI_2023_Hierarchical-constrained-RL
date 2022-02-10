@@ -2,9 +2,14 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-no_eps = 40000
+no_eps = 200000
 
-
+a = []
+for i in range(4):
+    a.append(torch.load("results/grid/sarsa/c" + str(i+1)))
+for i in a:
+    print(len(i))
+"""
 
 no_experiments = 4
 R = []
@@ -61,3 +66,4 @@ plt.title("Constraints for the Grid World Environment")
 name = "figures/grid/Constraints"
 plt.savefig(name)
 plt.close(fig)
+"""

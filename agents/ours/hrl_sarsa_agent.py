@@ -29,10 +29,19 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                  args,
                  env,
                  goal_space,
-                 writer = None):
+                 writer = None,
+                 save_dir=None,
+                 exp_no=None
+                 ):
         """
         init the agent here
         """
+
+        self.r_path = save_dir + "r" + exp_no
+        self.c_path = save_dir + "c" + exp_no
+
+        self.EVAL_REWARDS = []
+        self.EVAL_CONSTRAINTS = []
 
         self.grid_size = 14
         self.eval_env = copy.deepcopy(env)
@@ -170,7 +179,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         # reset state and env
         # reset exploration porcess
-        state = self.envs.reset()
+        state = self.env.reset()
         prev_state = state
 
         ep_reward = 0
@@ -219,14 +228,14 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     instrinc_rewards = []  # for low level n-step
                     values_lower     = []
                     done_masks_lower = []
-                    for n_l in range(self.args.traj_len_u):
+                    for n_l in range(self.args.traj_len_l):
 
 
                         action = self.pi_lower(state=state, goal=goal_hot_vec)
                         next_state, reward, done, info = self.env.step(actions=action)
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal)
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal)
+                        done_l = self.G.validate(current_state=next_state, goal_state=goal)  #this is to validate the end of the lower level episode
 
                         R += reward
 
@@ -265,13 +274,13 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     loss_lower = F.mse_loss(Q_values_lower, Q_targets_lower)
 
                     self.optimizer_lower.zero_grad()
-                    loss_lower.backwad()
+                    loss_lower.backward()
                     self.optimizer_lower.step()
 
 
                 values_upper.append(Q_value_upper)
-                rewards.append(R)
-                done_masks.append(done)
+                rewards_upper.append(torch.FloatTensor(R).unsqueeze(1).to(device=self.device))
+                done_masks.append(torch.FloatTensor(1 - done).unsqueeze(1).to(self.device))
 
 
             next_action = self.pi_meta(next_state)
@@ -279,7 +288,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             next_values = self.dqn_meta(next_state)
             Next_Value = next_values.gather(1, next_action)
 
-            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards, done_masks)
+            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
             Q_targets_upper = torch.cat(target_Q_values_upper).detach()
             Q_values_upper = torch.cat(values_upper)
 
@@ -289,6 +298,58 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             loss_upper.backward()
             self.optimizer_meta.step()
 
+            if self.num_episodes % self.args.eval_every == 0:
+                eval_reward, eval_constraint = self.eval()
+
+                self.EVAL_REWARDS.append(eval_reward)
+                self.EVAL_CONSTRAINTS.append(eval_constraint)
+
+                torch.save(self.EVAL_REWARDS, self.r_path)
+                torch.save(self.EVAL_CONSTRAINTS, self.c_path)
+
+    def eval(self):
+        """
+                    evaluate the current policy and log it
+                    """
+        avg_reward = []
+        avg_constraint = []
+
+        with torch.no_grad():
+            for _ in range(self.args.eval_n):
+
+                state = self.eval_env.reset()
+                done = False
+                ep_reward = 0
+                ep_constraint = 0
+                ep_len = 0
+                start_time = time.time()
+
+                while not done:
+                    # convert the state to tensor
+                    state_tensor = torch.FloatTensor(state).to(self.device).unsqueeze(0)
+
+                    # get the policy action
+                    goal = self.pi_meta(state_tensor, greedy_eval=True)
+
+                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec)
+
+                    t_lower = 0
+                    while t_lower <= self.args.max_ep_len_l:
+
+                        action = self.pi_lower(state, goal_hot_vec, greedy_eval=True)[0]
+                        next_state, reward, done, info = self.eval_env.step(action)
+                        ep_reward += reward
+                        ep_len += 1
+                        ep_constraint += info[self.cost_indicator]
+
+                        # update the state
+                        state = next_state
+
+                avg_reward.append(ep_reward)
+                avg_constraint.append(ep_constraint)
+
+        return np.mean(avg_reward), np.mean(avg_constraint)
 
 
 
