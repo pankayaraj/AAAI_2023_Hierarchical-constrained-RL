@@ -175,6 +175,70 @@ class SafeSarsaAgent(object):
 
         return action
 
+    def safe_deterministic_pi_softmax(self, state,  current_cost=0.0, greedy_eval=False):
+        """
+        take the action based on the current policy
+        """
+
+        with torch.no_grad():
+            q_value = self.dqn(state)
+
+            # Q_D(s,a)
+            cost_q_val = self.cost_model(state)
+            cost_r_val = self.review_model(state)
+
+            softmax = torch.nn.Softmax(dim=1)
+
+            constraint_mask = torch.le(cost_q_val + cost_r_val, self.args.d0 + current_cost).float()
+            filtered_Q = (q_value + 1000.0) * (constraint_mask)
+
+            c_sum = constraint_mask.sum(1)
+            action_mask = (c_sum == torch.zeros_like(c_sum)).cpu().numpy()
+            
+
+            filtered_action = filtered_Q.max(1)[1].cpu().numpy()
+
+            # alt action to take if infeasible solution
+            # minimize the cost
+            alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
+
+            prob  = softmax(q_value)
+            action_space = [i for i in range(self.action_dim)]
+
+            c = torch.cumsum(prob, dim=1)
+            c = c.cpu().detach().numpy()
+            u = np.random.rand(c.shape[0], 1)
+        #print(prob, c, u)
+
+            action = (u < c).argmax(axis=1)
+
+        return action
+        with torch.no_grad():
+            # to take random action or not
+            if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:
+                # No random action
+                q_value = self.dqn(state)
+
+                # Q_D(s,a)
+                cost_q_val = self.cost_model(state)
+                cost_r_val = self.review_model(state)
+
+                # find the action set
+                # create the filtered mask here
+
+
+
+
+                action = (1 - action_mask) * filtered_action + action_mask * alt_action
+
+                return action
+
+            else:
+                # create an array of random indices, for all the environments
+                action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+
+        return action
+
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """
@@ -227,6 +291,7 @@ class SafeSarsaAgent(object):
         """
         learning happens here
         """
+        self.policy = self.safe_deterministic_pi_softmax
 
         self.total_steps = 0
         self.eval_steps = 0
@@ -265,7 +330,7 @@ class SafeSarsaAgent(object):
                 state = torch.FloatTensor(state).to(self.device)
 
                 # get the action
-                action = self.safe_deterministic_pi(state, current_cost= current_cost)
+                action = self.policy(state, current_cost= current_cost)
                 next_state, reward, done, info = self.envs.step(action)
 
                 # convert it back to tensor
@@ -366,7 +431,7 @@ class SafeSarsaAgent(object):
             # calculate targets here
             next_state = torch.FloatTensor(next_state).to(self.device)
             next_q_values = self.dqn(next_state)
-            next_action = self.safe_deterministic_pi(next_state, current_cost)
+            next_action = self.policy(next_state, current_cost)
             next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
             next_q_values = next_q_values.gather(1, next_action)
 

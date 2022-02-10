@@ -36,6 +36,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         """
         init the agent here
         """
+        args.num_envs = 1
         if goal_space == None:
             goal_space = args.goal_space
         else:
@@ -56,7 +57,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         s = env.reset()
         self.state_dim = s.shape
         self.action_dim = env.action_space.n
-        self.goal_dim = self.G.action_shape
+
+        self.goal_dim = self.G.action_shape[0]
         self.goal_state_dim = np.concatenate((s,s)).shape
 
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
@@ -112,7 +114,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
-        self.eps_l = self.eps_l_decay.value(self.total_lower_time_step)
+        self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
 
         # for storing resutls
         self.results_dict = {
@@ -214,6 +216,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 goal = self.pi_meta(state=state)
 
                 goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+
+                print(goal)
                 q_values_upper = self.dqn_meta(state)
                 Q_value_upper = q_values_upper.gather(1, goal)
 
