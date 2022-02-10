@@ -95,6 +95,8 @@ class SafeSarsaAgent(object):
         envs = [make_env() for i in range(self.args.num_envs)]
         self.envs = SubprocVecEnv(envs)
 
+
+
         # create epsilon  and beta schedule
         self.eps_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
         # self.eps_decay = LinearSchedule(self.args.num_episodes * 200, 0.01, 1.0)
@@ -194,50 +196,25 @@ class SafeSarsaAgent(object):
 
             c_sum = constraint_mask.sum(1)
             action_mask = (c_sum == torch.zeros_like(c_sum)).cpu().numpy()
-            
-
-            filtered_action = filtered_Q.max(1)[1].cpu().numpy()
-
-            # alt action to take if infeasible solution
-            # minimize the cost
-            alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
-
-            prob  = softmax(q_value)
-            action_space = [i for i in range(self.action_dim)]
-
-            c = torch.cumsum(prob, dim=1)
-            c = c.cpu().detach().numpy()
-            u = np.random.rand(c.shape[0], 1)
-        #print(prob, c, u)
-
-            action = (u < c).argmax(axis=1)
-
-        return action
-        with torch.no_grad():
-            # to take random action or not
-            if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:
-                # No random action
-                q_value = self.dqn(state)
-
-                # Q_D(s,a)
-                cost_q_val = self.cost_model(state)
-                cost_r_val = self.review_model(state)
-
-                # find the action set
-                # create the filtered mask here
 
 
+            prob_1 = softmax(filtered_Q)
+            c_1 = torch.cumsum(prob_1, dim=1)
+            c_1 = c_1.cpu().detach().numpy()
+            u_1 = np.random.rand(c_1.shape[0], 1)
+            filtered_action = (u_1 < c_1).argmax(axis=1)
 
 
-                action = (1 - action_mask) * filtered_action + action_mask * alt_action
+            prob_2 = softmax(-1.*cost_q_val)
+            c_2 = torch.cumsum(prob_2, dim=1)
+            c_2 = c_2.cpu().detach().numpy()
+            u_2 = np.random.rand(c_2.shape[0], 1)
+            alt_action = (u_2 < c_2).argmax(axis=1)
 
-                return action
-
-            else:
-                # create an array of random indices, for all the environments
-                action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+            action = (1 - action_mask) * filtered_action + action_mask * alt_action
 
         return action
+
 
 
     def compute_n_step_returns(self, next_value, rewards, masks):

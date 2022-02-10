@@ -88,3 +88,57 @@ S2 = convert_value_to_hot_vec(32,9)
 
 print(G.intrisic_reward(S1, S2))
 """
+import gym
+
+from datetime import datetime
+import sys
+
+from collections import namedtuple
+
+from rllab.misc import ext
+
+from envs.ours.gird.safety_gridworld_with_key import PitWorld
+
+def create_env(args):
+    """
+    the main method which creates any environment
+    """
+    env = None
+
+    if args.env_name == "pg":
+        # create point gather envrionment
+        # env = PointGatherEnv(n_apples=2,
+        #                      n_bombs=8,
+        #                      apple_reward=+10,
+        #                      bomb_cost=10, #bomb inherently negative
+        #                      max_ep_len = 15,
+        #                      )
+        env = create_PointGatherEnv()
+    elif args.env_name == "pc":
+        # create Point Circle
+        env = SafePointEnv(circle_mode=True,
+                           xlim=2.5,
+                           abs_lim=True,
+                           target_dist=15,
+                           max_ep_len = 65,
+                           )
+    elif args.env_name == "cheetah":
+        # create Point Circle as per Lyp PG
+        env = SafeCheetahEnv(limit=1,
+                             max_ep_len=200)
+    elif args.env_name == "grid":
+        # create the grid with pits env
+        env = PitWorld(size = 18,
+                       max_step = 200,
+                       per_step_penalty = -1.0,
+                       goal_reward = 1000.0,
+                       obstace_density = 0.3,
+                       constraint_cost = 10.0,
+                       random_action_prob = 0.005,
+                       one_hot_features=True,
+                       rand_goal=True, # for testing purposes
+                       )
+    else:
+        raise Exception("Not implemented yet")
+
+    return env
