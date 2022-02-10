@@ -74,7 +74,8 @@ class Goal_Space():
     def convert_cooridnates_to_value(self, x, y):
         return convert_coordinated_into_int(x, y, self.grid_size)
 
-
+    def convert_hot_vec_to_value(self, hot_vec):
+        return torch.argmax(hot_vec)
 
 """
 G = Goal_Space([1,10], 9)

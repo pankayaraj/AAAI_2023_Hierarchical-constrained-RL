@@ -11,7 +11,7 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa/")
+    parser.add_argument('--save_dir', type=str, default="results/grid/hrl_sarsa/")
     parser.add_argument('--exp_no', type=str, default="1")
     parser.add_argument("--goal_space", type=list, default=[[124, 83, 76, 8, 118, 57]])  #this is for dicrete goal setting in an HRL setup
 
@@ -29,7 +29,8 @@ def get_args():
                              "bvf-ppo: for Backward value function based ppo\n" \
                              "sarsa: for n-step sarsa\n" \
                              "lyp-sarsa: for Lyapnunov based sarsa\n"\
-                             "bvf-sarsa: for Backward Value Function based sarsa"\
+                             "bvf-sarsa: for Backward Value Function based sarsa\n" \
+                             "hrl-sarsa: for HRL n-step sarsa\n" \
                         )
     parser.add_argument('--gamma', type=float, default=0.99, help="discount factor")
     parser.add_argument('--d0', type=float, default=5.0, help="the threshold for safety")
@@ -49,6 +50,8 @@ def get_args():
     parser.add_argument('--ppo-updates', type=int, default=1, help='num of ppo updates to do')
     parser.add_argument('--gae', type=float, default=0.95, help='GAE coefficient')
     parser.add_argument('--clip', type=float, default=0.2, help='clipping param for PPO')
+    parser.add_argument('--traj_len', type=int, default=10,
+                        help="for non HRL algos")
     parser.add_argument('--traj_len_u', type=int, default= 1, help="upper level's maximum length of the trajectory for an update")
     parser.add_argument('--traj_len_l', type=int, default=10,
                         help="lower level's maximum length of the trajectory for an update")

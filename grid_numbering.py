@@ -18,7 +18,7 @@ start = 180
 
 goal = [124, 83, 76, 8, 118, 57]
 
-print(G.convert_value_to_coordinates(180))
+print(G.convert_value_to_coordinates(143))
 A = np.array(A)
 #print(A)
 
@@ -30,5 +30,4 @@ env = create_env(args)
 
 state = env.reset()
 state = torch.FloatTensor(state)
-print(env.start_x, env.start_y, env.goal_x, env.goal_y)
-print(G.convert_hot_vec_to_value(state).item())
+print(G.convert_hot_vec_to_value(state))

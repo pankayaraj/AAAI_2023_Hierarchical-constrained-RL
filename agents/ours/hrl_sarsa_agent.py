@@ -28,7 +28,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
     def __init__(self,
                  args,
                  env,
-                 goal_space,
+                 goal_space=None,
                  writer = None,
                  save_dir=None,
                  exp_no=None
@@ -36,6 +36,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         """
         init the agent here
         """
+        if goal_space == None:
+            goal_space = args.goal_space
+        else:
+            raise Exception("Must Specify the goal space as a list")
 
         self.r_path = save_dir + "r" + exp_no
         self.c_path = save_dir + "c" + exp_no

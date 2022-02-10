@@ -140,6 +140,10 @@ class PitWorld(gym.Env):
                                                                       obstacle_density=self.obstace_density,
                                                                       rand_goal = self.rand_goal)
 
+        self.goal_y   = self.goal_pos[0]
+        self.goal_x   = self.goal_pos[1]
+        self.start_y  = self.start_pos[0]
+        self.start_x  = self.start_pos[1]
 
         # observation space
         # TODO: 4d tensor or 3d image

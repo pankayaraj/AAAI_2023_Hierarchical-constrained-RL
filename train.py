@@ -111,7 +111,7 @@ elif args.agent == "bvf-sarsa":
 elif args.agent == "lyp-sarsa":
     agent = LypSarsaAgent(args, env, writer=tb_writer)
 elif args.agent == "hrl-sarsa":
-    agent = HRL_Discrete_Goal_SarsaAgent(args, env, )
+    agent = HRL_Discrete_Goal_SarsaAgent(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
