@@ -142,6 +142,7 @@ class SafeSarsaAgent(object):
         """
         take the action based on the current policy
         """
+
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:

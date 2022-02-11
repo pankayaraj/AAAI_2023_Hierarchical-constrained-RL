@@ -12,7 +12,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='collect arguments')
 
     parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa_with_softmax/")
-    parser.add_argument('--exp_no', type=str, default="2")
+    parser.add_argument('--exp_no', type=str, default="6")
     parser.add_argument("--goal_space", type=list, default=[212, 86, 135, 282, 147, 200])  #this is for dicrete goal setting in an HRL setup
 
     parser.add_argument('--env-name', default='pg',
@@ -34,7 +34,7 @@ def get_args():
                              "hrl-sarsa: for HRL n-step sarsa\n" \
                         )
     parser.add_argument('--gamma', type=float, default=0.99, help="discount factor")
-    parser.add_argument('--d0', type=float, default=5.0, help="the threshold for safety")
+    parser.add_argument('--d0', type=float, default=20.0, help="the threshold for safety")
 
     # Actor Critic arguments goes here
     parser.add_argument('--value-loss-coef', type=float, default=0.5,
