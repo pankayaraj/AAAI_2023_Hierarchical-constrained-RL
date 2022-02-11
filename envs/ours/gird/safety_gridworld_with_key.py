@@ -277,6 +277,7 @@ class PitWorld_Key(gym.Env):
         return True
 
     def step(self, action):
+
         assert self.action_space.contains(action)
         # assert self.done is False
 

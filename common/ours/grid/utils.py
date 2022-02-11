@@ -62,7 +62,9 @@ class Goal_Space():
         if type(goal_state) != torch.Tensor:
             goal_state = torch.Tensor(goal_state)
 
-        return torch(current_state, goal_state)
+
+
+        return torch.equal(current_state, goal_state)
 
     def covert_value_to_hot_vec(self, goal):
         value = self.goal_space[goal]

@@ -19,7 +19,7 @@ from common.ours.grid.utils import Goal_Space
 from common.past.multiprocessing_envs import SubprocVecEnv
 from torchvision.transforms import ToTensor
 
-from models.past.grid_model import OneHotDQN
+from models.ours.grid_model import OneHotDQN
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
@@ -48,7 +48,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.EVAL_REWARDS = []
         self.EVAL_CONSTRAINTS = []
 
-        self.grid_size = 14
+        self.grid_size = 18
         self.eval_env = copy.deepcopy(env)
         self.args = args
 
@@ -72,7 +72,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
             self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
@@ -149,7 +149,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         """
         take the action based on the current policy
         """
-        state_goal = torch.cat((state, goal), dim=1)
+        print(state.shape, goal.shape)
+        state_goal = torch.cat((state, goal))
 
         with torch.no_grad():
             # to take random action or not
@@ -157,8 +158,12 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 q_value = self.dqn_lower(state_goal)
                 # chose the max/greedy actions
                 action = q_value.max(1)[1].cpu().numpy()
+                print(action)
+                print("action_greedy")
             else:
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+                print(action)
+                print("action_random")
         return action
 
 
@@ -217,9 +222,9 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
                 goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
-                print(goal)
+
                 q_values_upper = self.dqn_meta(state)
-                Q_value_upper = q_values_upper.gather(1, goal)
+                Q_value_upper = q_values_upper.gather(0, goal[0])
 
                 #an indicator that is used to terminate the lower level episode
                 t_lower = 0
@@ -239,17 +244,23 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     for n_l in range(self.args.traj_len_l):
 
 
-                        action = self.pi_lower(state=state, goal=goal_hot_vec)
-                        next_state, reward, done, info = self.env.step(actions=action)
+                        action = self.pi_lower(state=state, goal=goal_hot_vec).item()
+
+                        next_state, reward, done, info = self.env.step(action=action)
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal)
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal)  #this is to validate the end of the lower level episode
+                                                                 goal_state=goal_hot_vec)
+                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
+
+                        action = torch.LongTensor(action).to(self.device)
+                        print(action)
 
                         R += reward
 
-                        state_goal = torch.cat((state, goal_hot_vec), dim=1)
+                        state_goal = torch.cat((state, goal_hot_vec))
                         q_values_lower = self.dqn_lower(state=state_goal)
-                        Q_value_lower = q_values_lower.gather(1, action)
+
+                        print(q_values_lower.shape, action.shape)
+                        Q_value_lower = q_values_lower.gather(1, action[0])
 
 
                         values_lower.append(Q_value_lower)

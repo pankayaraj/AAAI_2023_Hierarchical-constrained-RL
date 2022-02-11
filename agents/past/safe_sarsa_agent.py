@@ -183,6 +183,8 @@ class SafeSarsaAgent(object):
         """
 
         with torch.no_grad():
+
+
             q_value = self.dqn(state)
 
             # Q_D(s,a)
@@ -197,25 +199,33 @@ class SafeSarsaAgent(object):
             c_sum = constraint_mask.sum(1)
             action_mask = (c_sum == torch.zeros_like(c_sum)).cpu().numpy()
 
+            if greedy_eval == "False":
+                prob_1 = softmax(filtered_Q)
+                c_1 = torch.cumsum(prob_1, dim=1)
+                c_1 = c_1.cpu().detach().numpy()
+                u_1 = np.random.rand(c_1.shape[0], 1)
+                filtered_action = (u_1 < c_1).argmax(axis=1)
 
-            prob_1 = softmax(filtered_Q)
-            c_1 = torch.cumsum(prob_1, dim=1)
-            c_1 = c_1.cpu().detach().numpy()
-            u_1 = np.random.rand(c_1.shape[0], 1)
-            filtered_action = (u_1 < c_1).argmax(axis=1)
 
+                prob_2 = softmax(-1.*cost_q_val)
+                c_2 = torch.cumsum(prob_2, dim=1)
+                c_2 = c_2.cpu().detach().numpy()
+                u_2 = np.random.rand(c_2.shape[0], 1)
+                alt_action = (u_2 < c_2).argmax(axis=1)
 
-            prob_2 = softmax(-1.*cost_q_val)
-            c_2 = torch.cumsum(prob_2, dim=1)
-            c_2 = c_2.cpu().detach().numpy()
-            u_2 = np.random.rand(c_2.shape[0], 1)
-            alt_action = (u_2 < c_2).argmax(axis=1)
+                action = (1 - action_mask) * filtered_action + action_mask * alt_action
+            else:
 
-            action = (1 - action_mask) * filtered_action + action_mask * alt_action
+                filtered_action = filtered_Q.max(1)[1].cpu().numpy()
+                alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
+                action = (1 - action_mask) * filtered_action + action_mask * alt_action
+
+                return action
 
         return action
 
-
+    def set_policy(self):
+        self.policy = self.safe_deterministic_pi_softmax
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """
@@ -268,7 +278,7 @@ class SafeSarsaAgent(object):
         """
         learning happens here
         """
-        self.policy = self.safe_deterministic_pi_softmax
+        self.set_policy()
 
         self.total_steps = 0
         self.eval_steps = 0
@@ -464,6 +474,8 @@ class SafeSarsaAgent(object):
         """
         evaluate the current policy and log it
         """
+        self.set_policy()
+
         avg_reward = []
         avg_constraint = []
 
@@ -484,7 +496,7 @@ class SafeSarsaAgent(object):
                     state =  torch.FloatTensor(state).to(self.device).unsqueeze(0)
 
                     # get the policy action
-                    action = self.safe_deterministic_pi(state, current_cost=current_cost, greedy_eval=True)[0]
+                    action = self.policy(state, current_cost=current_cost, greedy_eval=True)[0]
 
                     next_state, reward, done, info = self.eval_env.step(action)
                     ep_reward += reward
