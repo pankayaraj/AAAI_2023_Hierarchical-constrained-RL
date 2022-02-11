@@ -28,6 +28,7 @@ from common.past.arguments import get_args
 args = get_args()
 env = create_env(args)
 
+print(env.to_string())
 state = env.reset()
 state = torch.FloatTensor(state)
 print(G.convert_hot_vec_to_value(state))

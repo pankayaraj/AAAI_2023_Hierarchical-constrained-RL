@@ -6,7 +6,7 @@ no_eps = 200000
 l = no_eps//1000
 a = []
 for i in range(4):
-    a.append(torch.load("results/grid/sarsa/c" + str(i+1))[:l])
+    a.append(torch.load("results/grid/sarsa_key/c" + str(i+1))[:l])
 for i in a:
     print(len(i))
 """"""
@@ -18,10 +18,10 @@ R_safe = []
 C_safe = []
 
 for i in range(no_experiments):
-    R.append(torch.load("results/grid/sarsa/r" + str(i + 1))[:l])
-    C.append(torch.load("results/grid/sarsa/c" + str(i + 1))[0:l])
-    R_safe.append(torch.load("results/grid/safe_sarsa/r" + str(i+1))[:l])
-    C_safe.append(torch.load("results/grid/safe_sarsa/c" + str(i+1))[0:l])
+    R.append(torch.load("results/grid/sarsa_key/r" + str(i + 1))[:l])
+    C.append(torch.load("results/grid/sarsa_key/c" + str(i + 1))[0:l])
+    R_safe.append(torch.load("results/grid/safe_sarsa_key/r" + str(i+1))[:l])
+    C_safe.append(torch.load("results/grid/safe_sarsa_key/c" + str(i+1))[0:l])
 
 R_avg = []
 C_avg = []
@@ -76,7 +76,7 @@ plt.legend( prop={'size':40})
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Reward", size=40)
 plt.title("Reward comparision for the Grid World Environment", size=40)
-name = "figures/grid/Rewards"
+name = "figures/grid/Rewards_Key"
 plt.savefig(name)
 plt.close(fig)
 
@@ -95,7 +95,7 @@ plt.legend(prop={'size':40})
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Constraints", size=40)
 plt.title("Constraint comparision for the Grid World Environment", size=40)
-name = "figures/grid/Constraints"
+name = "figures/grid/Constraints_Key"
 
 ax.set_ylim(0, 150)
 plt.savefig(name)

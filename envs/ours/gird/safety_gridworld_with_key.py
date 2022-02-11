@@ -233,17 +233,17 @@ class PitWorld_Key(gym.Env):
         for y in range(my):
             for x in range(mx):
                 if self.maze[BLOCK][y][x] == 1:
-                    str += '  n  #'
+                    str += '  #'
                 elif self.maze[AGENT][y][x] == 1:
-                    str += ' A'
+                    str += '  A'
                 elif self.maze[GOAL][y][x] == 1:
-                    str += ' G'
+                    str += '  G'
                 elif self.maze[PIT][y][x] == 1:
-                    str += ' x'
+                    str += '  x'
                 elif self.maze[KEY][y][x] == 1:
-                    str += ' K'
+                    str += '  K'
                 else:
-                    str += '  '
+                    str += '   '
             str += '\n'
         return str
 
