@@ -60,7 +60,7 @@ class SarsaAgent(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
             self.dqn = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
             self.dqn_target = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
         else:

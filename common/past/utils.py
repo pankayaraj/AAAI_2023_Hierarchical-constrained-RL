@@ -15,6 +15,7 @@ from envs.custom_mujoco.halfcheetah_speedlimit import SafeCheetahEnv
 from envs.rllib_mujoco.circle.point_env_safe import SafePointEnv
 """
 from envs.past.grid.safety_gridworld import PitWorld
+from envs.ours.gird.safety_gridworld_with_key import PitWorld_Key
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state',
                                        'done',))
 
@@ -189,6 +190,17 @@ def create_env(args):
                        one_hot_features=True,
                        rand_goal=True, # for testing purposes
                        )
+    elif args.env_name == "grid_key":
+        env = PitWorld_Key(size=18,
+                           max_step=200,
+                           per_step_penalty=-1.0,
+                           goal_reward=1000.0,
+                           obstace_density=0.3,
+                           constraint_cost=10.0,
+                           random_action_prob=0.005,
+                           one_hot_features=True,
+                           rand_goal=True,  # for testing purposes
+                           )
     else:
         raise Exception("Not implemented yet")
 

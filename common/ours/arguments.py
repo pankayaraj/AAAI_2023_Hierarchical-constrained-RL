@@ -11,15 +11,16 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa_softmax/")
-    parser.add_argument('--exp_no', type=str, default="3")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_sarsa_key/")
+    parser.add_argument('--exp_no', type=str, default="4")
     parser.add_argument("--goal_space", type=list, default=[[124, 83, 76, 8, 118, 57]])  #this is for dicrete goal setting in an HRL setup
 
     parser.add_argument('--env-name', default='pg',
                         help="pg: point gather env\n"\
                              "cheetah: safe-cheetah env\n"\
                              "grid: grid world env\n"\
-                            "pc: point circle env\n"\
+                            "pc: point circle env\n" \
+                             "grid_key: grid_world env with key\n" \
                         )
 
     parser.add_argument('--agent', default='ppo',

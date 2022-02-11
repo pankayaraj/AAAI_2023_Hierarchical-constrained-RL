@@ -105,7 +105,7 @@ def generate_maze(size=27, obstacle_density=0.3, gauss_placement=False, rand_goa
 
 
 
-class PitWorld(gym.Env):
+class PitWorld_Key(gym.Env):
     """
     the env from safe lyp RL
     """
@@ -166,6 +166,8 @@ class PitWorld(gym.Env):
     def reset(self):
         """
         """
+        self.key_picked = False
+
         self.maze = copy.deepcopy(self.init_maze)
         self.agent_pos = copy.deepcopy(self.start_pos)
 
@@ -300,7 +302,7 @@ class PitWorld(gym.Env):
             self.key_picked = True
         # if reached GOA                                                     L
         if self.maze[GOAL][self.agent_pos[0]][self.agent_pos[1]] == 1.0:
-            if self.key_pickedL:
+            if self.key_picked:
                 reward = self.goal_reward*5
             else:
                 reward = self.goal_reward

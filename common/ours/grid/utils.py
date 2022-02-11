@@ -97,9 +97,9 @@ from collections import namedtuple
 
 from rllab.misc import ext
 
-from envs.ours.gird.safety_gridworld_with_key import PitWorld
+from envs.ours.gird.safety_gridworld_with_key import PitWorld_Key
 
-def create_env(args):
+def create_env_hrl(args):
     """
     the main method which creates any environment
     """
@@ -128,7 +128,7 @@ def create_env(args):
                              max_ep_len=200)
     elif args.env_name == "grid":
         # create the grid with pits env
-        env = PitWorld(size = 18,
+        env = PitWorld_Key(size = 18,
                        max_step = 200,
                        per_step_penalty = -1.0,
                        goal_reward = 1000.0,
