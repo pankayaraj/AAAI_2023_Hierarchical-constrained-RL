@@ -12,7 +12,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='collect arguments')
 
     parser.add_argument('--save_dir', type=str, default="results/grid/hrl_sarsa/")
-    parser.add_argument('--exp_no', type=str, default="8")
+    parser.add_argument('--exp_no', type=str, default="7")
     parser.add_argument("--goal_space", type=list, default=[212, 86, 135, 282, 147, 200])  #this is for dicrete goal setting in an HRL setup
 
     parser.add_argument('--env-name', default='pg',
@@ -87,7 +87,7 @@ def get_args():
 
     parser.add_argument('--max_ep_len_u', type=int, default=int(5),
                         help="number of steps in an episode")
-    parser.add_argument('--max_ep_len_l', type=int, default=int(40),
+    parser.add_argument('--max_ep_len_l', type=int, default=int(100),
                         help="number of steps in an episode")
 
     # Evaluation arguments

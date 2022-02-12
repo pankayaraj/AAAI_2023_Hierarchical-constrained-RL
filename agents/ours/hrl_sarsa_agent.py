@@ -115,7 +115,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.num_episodes = 0
 
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -141,8 +141,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         choose goal based on the current policy
         """
         with torch.no_grad():
+
+            self.eps_u = self.eps_u_decay.value(self.total_steps)
             # to choose random goal or not
-            if (random.random() > self.eps_u_decay.value(self.total_steps)) or greedy_eval:
+            if (random.random() > self.eps_u) or greedy_eval:
                 q_value = self.dqn_meta(state)
 
                 # chose the max/greedy actions
@@ -159,10 +161,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         state_goal = torch.cat((state, goal))
 
-
+        self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
         with torch.no_grad():
             # to take random action or not
-            if (random.random() > self.eps_l_decay.value(self.total_lower_time_steps)) or greedy_eval:
+            if (random.random() > self.eps_l) or greedy_eval:
                 q_value = self.dqn_lower(state_goal)
                 # chose the max/greedy actions
                 action = np.array([q_value.max(0)[1].cpu().numpy()])
@@ -226,6 +228,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         start_time = time.time()
 
         while self.num_episodes < self.args.num_episodes:
+
+
 
             next_state = None
             done = None
@@ -305,6 +309,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                         done_masks_lower.append((1 -done_l))
 
                         t_lower += 1
+                        self.total_steps += 1
+                        self.total_lower_time_steps += 1
 
                         state = next_state
                         #break if goal is current_state or the if the main episode terminated
@@ -353,6 +359,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     #evaluation logging
                     if self.num_episodes % self.args.eval_every == 0:
                         eval_reward, eval_constraint = self.eval()
+
+                        print("Epsilon Upper and Lower:" + str(self.eps_u) +", " + str(self.eps_l))
 
                         self.EVAL_REWARDS.append(eval_reward)
                         self.EVAL_CONSTRAINTS.append(eval_constraint)
