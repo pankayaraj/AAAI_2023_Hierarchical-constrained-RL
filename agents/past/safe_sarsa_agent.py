@@ -226,7 +226,7 @@ class SafeSarsaAgent(object):
         return action
 
     def set_policy(self):
-        self.policy = self.safe_deterministic_pi_softmax
+        self.policy = self.safe_deterministic_pi
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """

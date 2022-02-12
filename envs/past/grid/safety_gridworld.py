@@ -282,6 +282,7 @@ class PitWorld(gym.Env):
             constraint = self.constraint_cost
 
         # if max time steps reached
+
         if self.t >= self.max_step:
             self.done = True
 

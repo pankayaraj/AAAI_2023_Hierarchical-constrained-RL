@@ -13,6 +13,7 @@ def convert_coordinated_into_int(x, y, grid_size):
     return value
 
 def convert_value_to_hot_vec(value, grid_size):
+
     hot_vector = [0 for _ in range(grid_size*grid_size)]
     hot_vector[value] = 1
     return np.array(hot_vector).flatten()
@@ -45,7 +46,7 @@ class Goal_Space():
         current_value = torch.argmax(current_state).item()
         goal_value = torch.argmax(goal_state).item()
 
-        print(current_value, goal_value)
+        #print(current_value, goal_value)
         if self.intrinsic_reward_type == "eculidian distance":
             f = euclidian_distance(current_value, goal_value, self.grid_size)
             return -f

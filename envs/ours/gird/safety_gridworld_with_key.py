@@ -312,6 +312,7 @@ class PitWorld_Key(gym.Env):
         if self.maze[PIT][self.agent_pos[0]][self.agent_pos[1]] == 1.0:
             constraint = self.constraint_cost
 
+
         # if max time steps reached
         if self.t >= self.max_step:
             self.done = True

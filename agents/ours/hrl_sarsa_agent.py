@@ -48,11 +48,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.EVAL_REWARDS = []
         self.EVAL_CONSTRAINTS = []
 
-        self.grid_size = 18
+        self.TRAIN_REWARDS = []
+        self.TRAIN_CONSTRAINTS = []
+
+
         self.eval_env = copy.deepcopy(env)
         self.args = args
 
-        self.G = Goal_Space(goal_space=goal_space,grid_size=self.grid_size)
+        #for the time being let's skip the vectorized environment's added complexity in HRL
+        self.env = create_env(args)
+        self.G = Goal_Space(goal_space=goal_space, grid_size=self.env.size)
+        self.grid_size = self.env.size
+
 
         s = env.reset()
         self.state_dim = s.shape
@@ -76,8 +83,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
-            self.dqn_lower = OneHotDQN(self.goal_state_dim, self.goal_dim).to(self.device)
-            self.dqn_lower_target = OneHotDQN(self.goal_state_dim, self.goal_dim).to(self.device)
+            self.dqn_lower = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_lower_target = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
         else:
             raise Exception("not implemented yet!")
 
@@ -100,8 +107,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.envs = SubprocVecEnv(envs)
         """
 
-        #for the time being let's skip the vectorized environment's added complexity in HRL
-        self.env = create_env(args)
+
 
         self.total_steps = 0
         self.total_lower_time_steps = 0
@@ -138,8 +144,9 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             # to choose random goal or not
             if (random.random() > self.eps_u_decay.value(self.total_steps)) or greedy_eval:
                 q_value = self.dqn_meta(state)
+
                 # chose the max/greedy actions
-                goal = q_value.max(1)[1].cpu().numpy()
+                goal = np.array([q_value.max(0)[1].cpu().numpy()])
             else:
                 goal = np.random.randint(0, high=self.goal_dim, size = (self.args.num_envs, ))
 
@@ -149,21 +156,22 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         """
         take the action based on the current policy
         """
-        print(state.shape, goal.shape)
+
         state_goal = torch.cat((state, goal))
+
 
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_l_decay.value(self.total_lower_time_steps)) or greedy_eval:
                 q_value = self.dqn_lower(state_goal)
                 # chose the max/greedy actions
-                action = q_value.max(1)[1].cpu().numpy()
-                print(action)
-                print("action_greedy")
+                action = np.array([q_value.max(0)[1].cpu().numpy()])
+                #print(action)
+                #print("action_greedy")
             else:
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
-                print(action)
-                print("action_random")
+                #print(action)
+                #print("action_random")
         return action
 
 
@@ -179,6 +187,24 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         return returns
 
+    def log_episode_stats(self, ep_reward, ep_constraint):
+        """
+        log the stats for environment performance
+        """
+        # log episode statistics
+        self.TRAIN_REWARDS.append(ep_reward)
+        self.TRAIN_CONSTRAINTS.append(ep_constraint)
+
+
+
+        log(
+            'Num Episode {}\t'.format(self.num_episodes) + \
+            'E[R]: {:.2f}\t'.format(ep_reward) +\
+            'E[C]: {:.2f}\t'.format(ep_constraint) +\
+            'avg_train_reward: {:.2f}\t'.format(np.mean(self.TRAIN_REWARDS[-100:])) +\
+            'avg_train_constraint: {:.2f}\t'.format(np.mean(self.TRAIN_CONSTRAINTS[-100:]))
+            )
+
     def run(self):
         """
         Learning happens here
@@ -191,11 +217,12 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         # reset state and env
         # reset exploration porcess
         state = self.env.reset()
-        prev_state = state
 
-        ep_reward = 0
-        ep_len = 0
-        ep_constraint = 0
+
+        #total episode reward, length for logging purposes
+        self.ep_reward = 0
+        self.ep_len = 0
+        self.ep_constraint = 0
         start_time = time.time()
 
         while self.num_episodes < self.args.num_episodes:
@@ -214,6 +241,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             values_upper = []
             rewards_upper= []
             done_masks   = []
+
+
 
             for n_u in range(self.args.traj_len_u):
 
@@ -237,54 +266,62 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
 
                 #this will terminate of the current lower level episoded went beyond limit
-                while t_lower <=  self.args.max_ep_len_l:
+
+                while t_lower <= self.args.max_ep_len_l-1:
+
                     instrinc_rewards = []  # for low level n-step
                     values_lower     = []
                     done_masks_lower = []
                     for n_l in range(self.args.traj_len_l):
+                        action = self.pi_lower(state=state, goal=goal_hot_vec)
 
+                        next_state, reward, done, info = self.env.step(action=action.item())
 
-                        action = self.pi_lower(state=state, goal=goal_hot_vec).item()
-
-                        next_state, reward, done, info = self.env.step(action=action)
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal_hot_vec)
                         done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
-                        action = torch.LongTensor(action).to(self.device)
-                        print(action)
+
+                        action = torch.LongTensor(action).unsqueeze(1).to(self.device)
+                        next_state = torch.FloatTensor(next_state).to(self.device)
 
                         R += reward
 
-                        state_goal = torch.cat((state, goal_hot_vec))
-                        q_values_lower = self.dqn_lower(state=state_goal)
+                        #for training logging purposes
+                        self.ep_len += 1
+                        self.ep_constraint += info[self.cost_indicator]
+                        self.ep_reward += reward
 
-                        print(q_values_lower.shape, action.shape)
-                        Q_value_lower = q_values_lower.gather(1, action[0])
+
+
+                        state_goal = torch.cat((state, goal_hot_vec))
+
+                        q_values_lower = self.dqn_lower(state=state_goal)
+                        Q_value_lower = q_values_lower.gather(0, action[0])
 
 
                         values_lower.append(Q_value_lower)
-                        instrinc_rewards.append(torch.FloatTensor(instrinc_reward).unsqueeze(1).to(device=self.device))
-                        done_masks_lower.append(torch.FloatTensor(1 - done_l).unsqueeze(1).to(self.device))
+                        instrinc_rewards.append(instrinc_reward)
+                        done_masks_lower.append((1 -done_l))
 
                         t_lower += 1
 
                         state = next_state
                         #break if goal is current_state or the if the main episode terminated
+
                         if done or done_l:
-                            self.num_episodes += 1
                             break
 
 
 
 
-                    next_state = torch.FloatTensor(next_state).to(self.device)
-                    next_state_goal = torch.cat((next_state, goal_hot_vec), dim=1)
+                    next_state_goal = torch.cat((next_state, goal_hot_vec))
 
                     next_action = self.pi_lower(next_state, goal_hot_vec)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
                     next_values = self.dqn_lower(next_state_goal)
-                    Next_Value = next_values.gather(1, next_action)
+                    Next_Value = next_values.gather(0, next_action[0])
+
 
                     target_Q_values_lower = self.compute_n_step_returns(Next_Value, instrinc_rewards, done_masks_lower)
                     Q_targets_lower = torch.cat(target_Q_values_lower).detach()
@@ -296,16 +333,55 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     loss_lower.backward()
                     self.optimizer_lower.step()
 
+                    if done:
+                        break
 
                 values_upper.append(Q_value_upper)
-                rewards_upper.append(torch.FloatTensor(R).unsqueeze(1).to(device=self.device))
-                done_masks.append(torch.FloatTensor(1 - done).unsqueeze(1).to(self.device))
+                rewards_upper.append(R)
+                done_masks.append((1 - done))
 
 
-            next_action = self.pi_meta(next_state)
-            next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
+
+                if done:
+
+                    self.num_episodes += 1
+
+                    #training logging
+                    if self.num_episodes % 100 == 0:
+                        self.log_episode_stats(ep_reward=self.ep_reward, ep_constraint=self.ep_constraint)
+
+                    #evaluation logging
+                    if self.num_episodes % self.args.eval_every == 0:
+                        eval_reward, eval_constraint = self.eval()
+
+                        self.EVAL_REWARDS.append(eval_reward)
+                        self.EVAL_CONSTRAINTS.append(eval_constraint)
+
+                        torch.save(self.EVAL_REWARDS, self.r_path)
+                        torch.save(self.EVAL_CONSTRAINTS, self.c_path)
+
+                        log('----------------------------------------')
+                        log('Eval[R]: {:.2f}\t'.format(eval_reward) + \
+                            'Eval[C]: {}\t'.format(eval_constraint) + \
+                            'Episode: {}\t'.format(self.num_episodes) + \
+                            'avg_eval_reward: {:.2f}\t'.format(np.mean(self.EVAL_REWARDS[-10:])) + \
+                            'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.EVAL_CONSTRAINTS[-10:]))
+                            )
+                        log('----------------------------------------')
+
+                    # resting episode rewards
+                    self.ep_reward = 0
+                    self.ep_len = 0
+                    self.ep_constraint = 0
+
+                    state = self.env.reset() #reset
+                    break #this break is to terminate the higher tier episode as the episode is now over
+
+
+            next_goal = self.pi_meta(next_state)
+            next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
             next_values = self.dqn_meta(next_state)
-            Next_Value = next_values.gather(1, next_action)
+            Next_Value = next_values.gather(0, next_goal[0])
 
             target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
             Q_targets_upper = torch.cat(target_Q_values_upper).detach()
@@ -317,14 +393,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             loss_upper.backward()
             self.optimizer_meta.step()
 
-            if self.num_episodes % self.args.eval_every == 0:
-                eval_reward, eval_constraint = self.eval()
 
-                self.EVAL_REWARDS.append(eval_reward)
-                self.EVAL_CONSTRAINTS.append(eval_constraint)
-
-                torch.save(self.EVAL_REWARDS, self.r_path)
-                torch.save(self.EVAL_CONSTRAINTS, self.c_path)
 
     def eval(self):
         """
@@ -344,11 +413,14 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 start_time = time.time()
 
                 while not done:
-                    # convert the state to tensor
-                    state_tensor = torch.FloatTensor(state).to(self.device).unsqueeze(0)
 
-                    # get the policy action
-                    goal = self.pi_meta(state_tensor, greedy_eval=True)
+                    # convert the state to tensor
+                    state = torch.FloatTensor(state).to(self.device)
+
+                    # get the goal
+                    goal = self.pi_meta(state, greedy_eval=True)
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+
 
                     goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
                     goal_hot_vec = torch.FloatTensor(goal_hot_vec)
@@ -356,17 +428,27 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     t_lower = 0
                     while t_lower <= self.args.max_ep_len_l:
 
-                        action = self.pi_lower(state, goal_hot_vec, greedy_eval=True)[0]
-                        next_state, reward, done, info = self.eval_env.step(action)
+                        action = self.pi_lower(state, goal_hot_vec, greedy_eval=True)
+
+                        next_state, reward, done, info = self.eval_env.step(action.item())
                         ep_reward += reward
                         ep_len += 1
                         ep_constraint += info[self.cost_indicator]
 
+                        next_state = torch.FloatTensor(next_state).to(self.device)
                         # update the state
                         state = next_state
 
+                        t_lower += 1
+
+                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+                        if done_l or done:
+                            break
+
                 avg_reward.append(ep_reward)
                 avg_constraint.append(ep_constraint)
+
+
 
         return np.mean(avg_reward), np.mean(avg_constraint)
 
