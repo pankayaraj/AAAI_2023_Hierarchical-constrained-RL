@@ -122,6 +122,6 @@ plt.ylabel("Constraints", size=40)
 plt.title("Constraint comparision for the Grid World Environment with a key", size=40)
 name = "figures/grid/Constraints_Key"
 
-ax.set_ylim(0, 150)
+ax.set_ylim(0, 300)
 plt.savefig(name)
 plt.close(fig)

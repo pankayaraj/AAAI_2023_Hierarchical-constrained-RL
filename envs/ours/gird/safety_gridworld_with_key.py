@@ -227,7 +227,21 @@ class PitWorld_Key(gym.Env):
 
 
 
-    def to_string(self):
+    def to_string(self, goal_space=None):
+
+        #here goal space is given as a list of integer values as done in the arguments. This it is converted into coordinates as done int \ours\grid\utils.py
+        SUB_G = np.zeros((self.size, self.size))
+        if goal_space != None:
+            g_s_x = []
+            g_s_y = []
+
+            for i in goal_space:
+                g_s_x.append((i) % self.size)
+                g_s_y.append((i) //self.size)
+
+            for j in range(len(goal_space)):
+                SUB_G[g_s_y[j]][g_s_x[j]] = 1
+
         my = self.maze.shape[1]
         mx = self.maze.shape[2]
         str = ''
@@ -243,6 +257,11 @@ class PitWorld_Key(gym.Env):
                     str += '  x'
                 elif self.maze[KEY][y][x] == 1:
                     str += '  K'
+                elif goal_space != None:
+                    if SUB_G[y][x] == 1:
+                        str += '  S'
+                    else:
+                        str += '   '
                 else:
                     str += '   '
             str += '\n'

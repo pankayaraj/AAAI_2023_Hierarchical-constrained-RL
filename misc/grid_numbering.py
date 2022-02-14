@@ -17,7 +17,7 @@ for i in range(18): #y
 
 start = 180
 
-goal = [212, 86, 135, 282, 147, 200]
+goal = [212, 86, 160, 163, 282, 135, 200]  #key 160, goal 163
 print(G.convert_cooridnates_to_value(16, 10))
 print(G.convert_value_to_coordinates(298))
 A = np.array(A)
@@ -31,7 +31,7 @@ args = get_args()
 args.env_name = "grid_key"
 env = create_env(args)
 
-print(env.to_string())
+print(env.to_string(goal_space=goal))
 
 state = env.reset()
 state = torch.FloatTensor(state)
