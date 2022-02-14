@@ -102,6 +102,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
             self.target_lower_cost_model.load_state_dict(self.cost_lower_model.state_dict())
             self.target_lower_review_model.load_state_dict(self.review_lower_model.state_dict())
+
+
+            self.cost_allocator = OneHotCostAllocator(self.state_dim).to(self.device)
+            self.cost_allocator_target = OneHotCostAllocator(self.state_dim).to(self.device)
         else:
             raise Exception("not implemented yet!")
 
