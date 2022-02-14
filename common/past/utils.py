@@ -199,7 +199,7 @@ def create_env(args):
                            constraint_cost=10.0,
                            random_action_prob=0.005,
                            one_hot_features=True,
-                           rand_goal=True,  # for testing purposes
+                           rand_goal=False,  # for testing purposes
                            )
     else:
         raise Exception("Not implemented yet")

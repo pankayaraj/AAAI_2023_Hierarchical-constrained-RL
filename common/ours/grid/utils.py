@@ -1,3 +1,5 @@
+import math
+
 import torch
 import numpy as np
 from math import sqrt
@@ -21,9 +23,10 @@ def convert_value_to_hot_vec(value, grid_size):
 def euclidian_distance(value1, value2, grid_size):
     x1, y1 = convert_int_to_coordinates(value1, grid_size)
     x2, y2 = convert_int_to_coordinates(value2, grid_size)
+    max = (math.sqrt(2*grid_size**2))
 
     d = (x1-x2)**2 + (y1-y2)**2
-    return sqrt(d)
+    return sqrt(d)/max
 
 
 #class that defines goal space

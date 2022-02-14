@@ -99,7 +99,8 @@ def generate_maze(size=27, obstacle_density=0.3, gauss_placement=False, rand_goa
                 # maze_tensor[j+1][i+1][PIT] = 1.0
                 maze_tensor[PIT][j+1][i+1] = 1.0
 
-
+    #print("Goal: " + str((goal_x+1, goal_y+1)))
+    #print("Key: " + str((key_x+1, key_y+1)))
     return maze_tensor, [start_y+1, start_x+1], [goal_y+1, goal_x+1]
 
 
