@@ -301,7 +301,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         # reset state and env
         # reset exploration porcess
         state = self.env.reset()
-
+        state = torch.FloatTensor(state).to(device=self.device)
 
         #total episode reward, length for logging purposes
         self.ep_reward = 0
@@ -336,7 +336,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             while not done:
             #for n_u in range(self.args.traj_len_u):
 
-                state = torch.FloatTensor(state).to(device=self.device)
+
                 previous_state = state
 
 
@@ -358,7 +358,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 R = 0
 
                 goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                goal_hot_vec = torch.FloatTensor(goal_hot_vec)
+                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
 
                 #this will terminate of the current lower level episoded went beyond limit
@@ -375,11 +375,12 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal_hot_vec)
+                        next_state = torch.FloatTensor(next_state).to(self.device)
                         done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
 
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
-                        next_state = torch.FloatTensor(next_state).to(self.device)
+
 
                         R += reward
 
@@ -481,6 +482,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     self.ep_constraint = 0
 
                     state = self.env.reset() #reset
+                    state = torch.FloatTensor(state).to(device=self.device)
                     break #this break is to terminate the higher tier episode as the episode is now over
 
 
