@@ -23,7 +23,7 @@ from models.ours.grid_model import OneHotDQN
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
-class HRL_Discrete_Goal_SarsaAgent(object):
+class Dummy(object):
 
     def __init__(self,
                  args,
@@ -74,6 +74,9 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.goal_dim = self.G.action_shape[0]
         self.goal_state_dim = np.concatenate((s,s)).shape
 
+        # these are the cost conditioned value functions that will be used for reward Q vlaue functions
+        self.cost_goal_state_dim = (self.goal_state_dim[0] + 1,)
+        self.cost_state_dim = (self.state_dim[0] + 1,)
 
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
 

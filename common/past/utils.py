@@ -113,6 +113,8 @@ def get_filename(args):
         toprint += ['num_envs', 'traj_len', ]
     elif args.agent == "hrl-sarsa":
         toprint += ['num_envs', 'traj_len_u', 'traj_len_l' ]
+    elif args.agent == "safe-lower-hrl-sarsa":
+        toprint += ['num_envs', 'traj_len_u', 'traj_len_l' ]
     # bvf agents
     elif args.agent == "bvf-sarsa":
         toprint += ['num_envs', 'traj_len', 'cost_reverse_lr', 'cost_q_lr', ]

@@ -11,8 +11,8 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/hrl_sarsa_key/")
-    parser.add_argument('--exp_no', type=str, default="9")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_lower_hrl_sarsa_key/")
+    parser.add_argument('--exp_no', type=str, default="1")
     parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for dicrete goal setting in an HRL setup
     #[212, 86, 160, 163, 282, 135, 200]
     parser.add_argument('--env-name', default='pg',
@@ -72,6 +72,10 @@ def get_args():
                             help="reverse learning rate for reviewer")
     parser.add_argument('--cost-q-lr', type=float, default=5e-4,
                             help="reverse learning rate for critic")
+    parser.add_argument('--cost_allocator_lr', type=float, default=5e-4,
+                        help="cost_allocator learning rate for critic")
+
+
     parser.add_argument('--cost-sg-coeff', type=float, default=0.0,
                             help="the coeeficient for the safe guard policy, minimizes the cost")
     parser.add_argument('--prob-alpha', type=float, default=0.6,

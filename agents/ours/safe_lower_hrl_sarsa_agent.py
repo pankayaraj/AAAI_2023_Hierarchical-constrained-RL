@@ -23,7 +23,7 @@ from models.ours.grid_model import OneHotDQN, OneHotValueNetwork, OneHotCostAllo
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
-class HRL_Discrete_Goal_SarsaAgent(object):
+class SAFE_LOWER_HRL_Discrete_Goal_SarsaAgent(object):
 
     #this is a HRL SARSA Agent in which only the constraints are enforced on the lower lever. Only cost allocation is done in the higher level
     def __init__(self,
@@ -75,6 +75,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.goal_dim = self.G.action_shape[0]
         self.goal_state_dim = np.concatenate((s,s)).shape
 
+        #these are the cost conditioned value functions that will be used for reward Q vlaue functions
+        self.cost_goal_state_dim = (self.goal_state_dim[0] + 1,)
+        self.cost_state_dim = (self.state_dim[0] + 1,)
+
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
 
         # set the same random seed in the main launcher
@@ -87,18 +91,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.writer = writer
 
         if self.args.env_name == "grid" or self.args.env_name == "grid_key":
-            self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
-            self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
+            self.dqn_meta = OneHotDQN(self.cost_state_dim, self.goal_dim).to(self.device)
+            self.dqn_meta_target = OneHotDQN(self.cost_state_dim, self.goal_dim).to(self.device)
 
-            self.dqn_lower = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
-            self.dqn_lower_target = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_lower = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_lower_target = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
 
             # create more networks for lower level
-            self.cost_lower_model = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
-            self.review_lower_model = OneHotValueNetwork(self.state_dim).to(self.device)
+            self.cost_lower_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.review_lower_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
 
-            self.target_lower_cost_model = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
-            self.target_lower_review_model = OneHotValueNetwork(self.state_dim).to(self.device)
+            self.target_lower_cost_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.target_lower_review_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
 
             self.target_lower_cost_model.load_state_dict(self.cost_lower_model.state_dict())
             self.target_lower_review_model.load_state_dict(self.review_lower_model.state_dict())
@@ -116,7 +120,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.optimizer_meta = torch.optim.Adam(self.dqn_meta.parameters(), lr=self.args.lr)
         self.optimizer_lower = torch.optim.Adam(self.dqn_lower.parameters(), lr=self.args.lr)
         self.review_lower_optimizer = optim.Adam(self.review_lower_model.parameters(), lr=self.args.cost_reverse_lr)
-        self.critic_lower_optimizer = optim.Adam(self.cost_lower_model.parameters(), lr=self.args.cost_q_lr)
+        self.critic_lower_optimizer = optim.Adam(self.cost_lower_model.parameters(), lr=self.args.cost_q_lr) #for cost q function
+        self.cost_allocator_optimizer = optim.Adam(self.cost_allocator.parameters(), lr=self.args.cost_allocator_lr)
 
         """
         def make_env():
@@ -159,16 +164,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         else:
             raise Exception("not implemented yet")
 
-    def pi_meta(self, state, greedy_eval=False):
+    def pi_meta(self, state, cost, greedy_eval=False):
         """
         choose goal based on the current policy
         """
+        cost_state = torch.cat((state, cost))
+
         with torch.no_grad():
 
             self.eps_u = self.eps_u_decay.value(self.total_steps)
             # to choose random goal or not
             if (random.random() > self.eps_u) or greedy_eval:
-                q_value = self.dqn_meta(state)
+                q_value = self.dqn_meta(cost_state)
 
                 # chose the max/greedy actions
                 goal = np.array([q_value.max(0)[1].cpu().numpy()])
@@ -177,18 +184,18 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         return goal
 
-    def pi_lower(self, state, goal, greedy_eval=False):
+    def pi_lower(self, state, goal, cost, greedy_eval=False):
         """
         take the action based on the current policy
         """
 
-        state_goal = torch.cat((state, goal))
+        cost_state_goal = torch.cat((torch.cat((state, goal)), cost))
 
         self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_l) or greedy_eval:
-                q_value = self.dqn_lower(state_goal)
+                q_value = self.dqn_lower(cost_state_goal)
                 # chose the max/greedy actions
                 action = np.array([q_value.max(0)[1].cpu().numpy()])
 
@@ -302,6 +309,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         # reset exploration porcess
         state = self.env.reset()
         state = torch.FloatTensor(state).to(device=self.device)
+        previous_state = state
+        current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+        total_cost = torch.zeros(self.args.num_envs).to(self.device)
+        total_cost[0] = self.args.d0
 
         #total episode reward, length for logging purposes
         self.ep_reward = 0
@@ -337,18 +348,19 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             #for n_u in range(self.args.traj_len_u):
 
 
-                previous_state = state
+
+                cost_state = torch.cat((state, total_cost))
 
 
-
-                goal = self.pi_meta(state=state)
+                goal = self.pi_meta(state=state, cost=total_cost)
+                #cost_weight = self.cost_allocator(state=state)
 
                 x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
                 Goals_t.append((x_g, y_g, self.G.goal_space[goal.item()]))
 
                 goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
-                q_values_upper = self.dqn_meta(state)
+                q_values_upper = self.dqn_meta(cost_state)
                 Q_value_upper = q_values_upper.gather(0, goal[0])
 
                 #an indicator that is used to terminate the lower level episode
@@ -368,8 +380,13 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     instrinc_rewards = []  # for low level n-step
                     values_lower     = []
                     done_masks_lower = []
+                    cost_q_lower = []
+                    cost_r_lower = []
+                    prev_states_l = []
+                    constraints_lower = []
+
                     for n_l in range(self.args.traj_len_l):
-                        action = self.pi_lower(state=state, goal=goal_hot_vec)
+                        action = self.pi_lower(state=state, goal=goal_hot_vec, cost=total_cost)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
 
@@ -390,36 +407,48 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                         self.ep_reward += reward
 
 
+                        state_goal  = torch.cat((state, goal_hot_vec))
+                        cost_state_goal = torch.cat((torch.cat((state, goal_hot_vec)), total_cost))
 
-                        state_goal = torch.cat((state, goal_hot_vec))
-
-                        q_values_lower = self.dqn_lower(state=state_goal)
+                        q_values_lower = self.dqn_lower(state=cost_state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
+
+
+                        cost_values_lower = self.cost_lower_model(state=state_goal)
+                        Cost_value = cost_values_lower.gather(0, action[0])
+                        Review_value_lower = self.review_lower_model(state=state_goal)
 
 
                         values_lower.append(Q_value_lower)
                         instrinc_rewards.append(instrinc_reward)
                         done_masks_lower.append((1 -done_l))
+                        cost_q_lower.append(Cost_value)
+                        cost_r_lower.append(Review_value_lower)
+                        #constraints_lower.append(torch.FloatTensor([ci[self.cost_indicator] for ci in info]).unsqueeze(1).to(self.device))
 
                         t_lower += 1
                         self.total_steps += 1
                         self.total_lower_time_steps += 1
 
+                        previous_state = state
                         state = next_state
 
-                        #break if goal is current_state or the if the main episode terminated
+                        prev_states_l.append(previous_state) #this is to get the previous value for the backward review model
 
+                        #break if goal is current_state or the if the main episode terminated
                         if done or done_l:
                             break
 
                     x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
 
 
-                    next_state_goal = torch.cat((next_state, goal_hot_vec))
 
-                    next_action = self.pi_lower(next_state, goal_hot_vec)
+                    next_state_goal = torch.cat((next_state, goal_hot_vec))
+                    next_cost_state_goal = torch.cat((next_state_goal, total_cost))
+
+                    next_action = self.pi_lower(next_state, goal_hot_vec, cost=total_cost)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
-                    next_values = self.dqn_lower(next_state_goal)
+                    next_values = self.dqn_lower(next_cost_state_goal)
                     Next_Value = next_values.gather(0, next_action[0])
 
 
@@ -433,6 +462,20 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     loss_lower.backward()
                     self.optimizer_lower.step()
 
+                    """
+                    # calculate the cost-targets
+                    next_c_value = self.cost_lower_model(next_state_goal)
+                    Next_c_value = next_c_value.gather(0, next_action)
+
+                    cq_targets = self.compute_n_step_returns(Next_c_value, constraints_lower, done_masks_lower)
+                    C_q_targets = torch.cat(cq_targets).detach()
+                    C_q_vals = torch.cat(cost_q_lower)
+
+                    cost_critic_loss_lower = F.mse_loss(C_q_vals, C_q_targets)
+                    self.critic_lower_optimizer.zero_grad()
+                    cost_critic_loss_lower.backward()
+                    self.critic_lower_optimizer.step()
+                    """
                     if done:
                         break
 
@@ -486,9 +529,11 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     break #this break is to terminate the higher tier episode as the episode is now over
 
 
-            next_goal = self.pi_meta(next_state)
+            next_cost_state = torch.cat((next_state, total_cost))
+
+            next_goal = self.pi_meta(next_state, total_cost)
             next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-            next_values = self.dqn_meta(next_state)
+            next_values = self.dqn_meta(next_cost_state)
             Next_Value = next_values.gather(0, next_goal[0])
 
             target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
@@ -510,6 +555,9 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         avg_reward = []
         avg_constraint = []
 
+        total_cost = torch.zeros(self.args.num_envs).to(self.device)
+        total_cost[0] = self.args.d0
+
         with torch.no_grad():
             for _ in range(self.args.eval_n):
 
@@ -530,7 +578,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     state = torch.FloatTensor(state).to(self.device)
 
                     # get the goal
-                    goal = self.pi_meta(state, greedy_eval=True)
+                    goal = self.pi_meta(state, total_cost, greedy_eval=True)
 
                     x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
                     Goals.append((x_g, y_g))
@@ -545,7 +593,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     ir = 0
                     while t_lower <= self.args.max_ep_len_l:
 
-                        action = self.pi_lower(state, goal_hot_vec, greedy_eval=True)
+                        action = self.pi_lower(state, goal_hot_vec, total_cost, greedy_eval=True)
                         #print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                         #print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
