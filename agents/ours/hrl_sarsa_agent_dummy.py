@@ -19,7 +19,7 @@ from common.ours.grid.utils import Goal_Space
 from common.past.multiprocessing_envs import SubprocVecEnv
 from torchvision.transforms import ToTensor
 
-from models.ours.grid_model import OneHotDQN
+from models.ours.grid_model import OneHotDQN, OneHotValueNetwork, OneHotCostAllocator
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
@@ -95,6 +95,19 @@ class Dummy(object):
 
             self.dqn_lower = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
             self.dqn_lower_target = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
+
+            # create more networks for lower level
+            self.cost_lower_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.review_lower_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
+
+            self.target_lower_cost_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.target_lower_review_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
+
+            self.target_lower_cost_model.load_state_dict(self.cost_lower_model.state_dict())
+            self.target_lower_review_model.load_state_dict(self.review_lower_model.state_dict())
+
+            self.cost_allocator = OneHotCostAllocator(self.state_dim).to(self.device)
+            self.cost_allocator_target = OneHotCostAllocator(self.state_dim).to(self.device)
         else:
             raise Exception("not implemented yet!")
 
@@ -104,19 +117,12 @@ class Dummy(object):
 
         self.optimizer_meta = torch.optim.Adam(self.dqn_meta.parameters(), lr=self.args.lr)
         self.optimizer_lower = torch.optim.Adam(self.dqn_lower.parameters(), lr=self.args.lr)
-
-        """
-        def make_env():
-            def _thunk():
-                env = create_env(args)
-                return env
-
-            return _thunk
-
-        envs = [make_env() for i in range(self.args.num_envs)]
-        self.envs = SubprocVecEnv(envs)
-        """
-
+        #for cost value function
+        self.review_lower_optimizer = optim.Adam(self.review_lower_model.parameters(), lr=self.args.cost_reverse_lr)
+        # for cost q function
+        self.critic_lower_optimizer = optim.Adam(self.cost_lower_model.parameters(),lr=self.args.cost_q_lr)
+        #for cost allocator function
+        self.cost_allocator_optimizer = optim.Adam(self.cost_allocator.parameters(), lr=self.args.cost_allocator_lr)
 
 
         self.total_steps = 0
@@ -187,6 +193,48 @@ class Dummy(object):
                 #print("action_random")
         return action
 
+    def safe_deterministic_pi_lower(self, state, goal, cost,  d_low, current_cost=0.0, greedy_eval=False):
+        """
+        take the action based on the current policy
+        d_low: cost allocated for the current low level episode
+        """
+        state_goal_cost = torch.cat((torch.cat((state, goal)), cost))
+
+        with torch.no_grad():
+            # to take random action or not
+            self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
+            if (random.random() > self.eps_l) or greedy_eval:
+                # No random action
+                q_value = self.dqn_lower(state_goal_cost)
+
+                # Q_D(s,a)
+                cost_q_val = self.cost_lower_model(state_goal_cost)
+                cost_r_val = self.review_lower_model(state_goal_cost)
+
+                # find the action set
+                # create the filtered mask here
+                constraint_mask = torch.le(cost_q_val + cost_r_val, self.args.d0 + current_cost).float()
+
+                filtered_Q = (q_value + 1000.0) * (constraint_mask)
+
+                filtered_action = filtered_Q.max(1)[1].cpu().numpy()
+
+                # alt action to take if infeasible solution
+                # minimize the cost
+                alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
+
+                c_sum = constraint_mask.sum(1)
+                action_mask = ( c_sum == torch.zeros_like(c_sum)).cpu().numpy()
+
+                action = (1 - action_mask) * filtered_action + action_mask * alt_action
+
+                return action
+
+            else:
+                # create an array of random indices, for all the environments
+                action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
+
+        return action
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """
@@ -304,6 +352,9 @@ class Dummy(object):
                     instrinc_rewards = []  # for low level n-step
                     values_lower     = []
                     done_masks_lower = []
+                    constraints_lower = []
+                    begin_mask_lower = []
+
                     for n_l in range(self.args.traj_len_l):
                         action = self.pi_lower(state=state, goal=goal_hot_vec, cost=cost)
 
@@ -314,12 +365,21 @@ class Dummy(object):
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal_hot_vec)
 
+                        if t_lower == 0:
+                            begin_mask_l = True
+                        else:
+                            begin_mask_l = False
+
+
+
                         next_state = torch.FloatTensor(next_state).to(self.device)
                         done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
 
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
-
+                        current_cost = torch.FloatTensor(
+                            [info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(
+                            self.device)
 
                         R += reward
 
@@ -338,12 +398,15 @@ class Dummy(object):
 
                         values_lower.append(Q_value_lower)
                         instrinc_rewards.append(instrinc_reward)
-                        done_masks_lower.append((1 -done_l))
+                        done_masks_lower.append((1 - done_l))
+                        constraints_lower.append(info[self.cost_indicator])
+                        begin_mask_lower.append((1-begin_mask_l))
 
                         t_lower += 1
                         self.total_steps += 1
                         self.total_lower_time_steps += 1
 
+                        previous_state = state
                         state = next_state
 
                         #break if goal is current_state or the if the main episode terminated
