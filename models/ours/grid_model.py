@@ -76,7 +76,7 @@ class OneHotCostAllocator(nn.Module):
     def __init__(self, num_inputs):
         super(OneHotCostAllocator, self).__init__()
 
-        input_dim = num_inputs[0]+1 #+1 is for cost as an input
+        input_dim = num_inputs[0] #+1 is for cost as an input
         self.dummy_param = nn.Parameter(torch.empty(0)) #to get the device name designated to the module
 
         self.cost_allocator = nn.Sequential(
@@ -87,20 +87,19 @@ class OneHotCostAllocator(nn.Module):
             nn.Linear(64, 64),
             nn.ReLU(),
             nn.Linear(64, 2),
-            nn.Softmax(dim=1),
+            nn.Softmax(dim=0),
         )
 
-    def forward(self, state, cost):
+    def forward(self, state_cost):
 
         #to get the device assigned to the module at initalization
         device = self.dummy_param.device
 
-        if type(cost) != torch.Tensor:
-            cost = torch.reshape(torch.Tensor(np.array(cost)).to(device), shape=(-1,1))
-        if type(state) != torch.Tensor:
-            state = torch.Tensor(state).to(device=device)
 
-        inp = torch.cat((state, cost), dim=1)
+        if type(state_cost) != torch.Tensor:
+            state_cost = torch.Tensor(state_cost).to(device=device)
+
+        inp = state_cost
         cost_weights = self.cost_allocator(inp)
 
         return cost_weights
