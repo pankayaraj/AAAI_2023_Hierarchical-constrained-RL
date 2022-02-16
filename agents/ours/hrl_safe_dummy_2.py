@@ -23,7 +23,7 @@ from models.ours.grid_model import OneHotDQN, OneHotValueNetwork, OneHotCostAllo
 
 from common.past.schedules import LinearSchedule, ExponentialSchedule
 
-class Dummy(object):
+class Dummy_2(object):
 
     def __init__(self,
                  args,
@@ -90,11 +90,11 @@ class Dummy(object):
         self.writer = writer
 
         if self.args.env_name == "grid" or self.args.env_name == "grid_key":
-            self.dqn_meta = OneHotDQN(self.cost_state_dim, self.goal_dim).to(self.device)
-            self.dqn_meta_target = OneHotDQN(self.cost_state_dim, self.goal_dim).to(self.device)
+            self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
+            self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
-            self.dqn_lower = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
-            self.dqn_lower_target = OneHotDQN(self.cost_goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_lower = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_lower_target = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
 
             # create more networks for lower level
             self.cost_lower_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
@@ -131,7 +131,7 @@ class Dummy(object):
         self.num_episodes = 0
 
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(1000000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -152,17 +152,16 @@ class Dummy(object):
         else:
             raise Exception("not implemented yet")
 
-    def pi_meta(self, state, cost, greedy_eval=False):
+    def pi_meta(self, state, greedy_eval=False):
         """
         choose goal based on the current policy
         """
-        state_cost = torch.cat((state, cost))
         with torch.no_grad():
 
             self.eps_u = self.eps_u_decay.value(self.total_steps)
             # to choose random goal or not
             if (random.random() > self.eps_u) or greedy_eval:
-                q_value = self.dqn_meta(state_cost)
+                q_value = self.dqn_meta(state)
 
                 # chose the max/greedy actions
                 goal = np.array([q_value.max(0)[1].cpu().numpy()])
@@ -171,17 +170,17 @@ class Dummy(object):
 
         return goal
 
-    def pi_lower(self, state, goal, cost, greedy_eval=False):
+    def pi_lower(self, state, goal, greedy_eval=False):
         """
         take the action based on the current policy
         """
-        state_goal_cost = torch.cat((torch.cat((state, goal)), cost))
+        state_goal = torch.cat((state, goal))
 
         self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_l) or greedy_eval:
-                q_value = self.dqn_lower(state_goal_cost)
+                q_value = self.dqn_lower(state_goal)
                 # chose the max/greedy actions
                 action = np.array([q_value.max(0)[1].cpu().numpy()])
 
@@ -193,12 +192,11 @@ class Dummy(object):
                 #print("action_random")
         return action
 
-    def safe_deterministic_pi_lower(self, state, goal, cost,  d_low, current_cost=0.0, greedy_eval=False):
+    def safe_deterministic_pi_lower(self, state, goal, d_low, current_cost=0.0, greedy_eval=False):
         """
         take the action based on the current policy
         d_low: cost allocated for the current low level episode
         """
-        state_goal_cost = torch.cat((torch.cat((state, goal)), cost))
         state_goal = torch.cat((state, goal))
 
         with torch.no_grad():
@@ -207,27 +205,26 @@ class Dummy(object):
             if (random.random() > self.eps_l) or greedy_eval:
                 # No random action
 
-                q_value = self.dqn_lower(state_goal_cost)
+                q_value = self.dqn_lower(state_goal)
 
                 # Q_D(s,a)
                 cost_q_val = self.cost_lower_model(state_goal)
                 cost_r_val = self.review_lower_model(state_goal)
 
+
                 # find the action set
                 # create the filtered mask here
-                constraint_mask = torch.le(cost_q_val + cost_r_val, d_low + current_cost).float()
+                constraint_mask = torch.le(cost_q_val + cost_r_val, d_low + current_cost).float().squeeze(0)
 
                 filtered_Q = (q_value + 1000.0) * (constraint_mask)
 
                 filtered_action = np.array([filtered_Q.max(0)[1].cpu().numpy()])
-
                 # alt action to take if infeasible solution
                 # minimize the cost
                 alt_action = np.array([(-1. * cost_q_val).max(0)[1].cpu().numpy()])
 
                 c_sum = constraint_mask.sum(0)
                 action_mask = ( c_sum == torch.zeros_like(c_sum)).cpu().numpy()
-
 
                 action = (1 - action_mask) * filtered_action + action_mask * alt_action
 
@@ -294,12 +291,12 @@ class Dummy(object):
         # reset exploration porcess
         state = self.env.reset()
         state = torch.FloatTensor(state).to(device=self.device)
-
         previous_state = state
-        current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
+
         upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-
+        lower_cost_constraint[0] = 10 #manually set cost division for now
 
 
         #total episode reward, length for logging purposes
@@ -311,7 +308,7 @@ class Dummy(object):
 
         while self.num_episodes < self.args.num_episodes:
 
-            upper_cost_constraint[0] = self.args.d0
+            #upper_cost_constraint[0] = self.args.d0
 
             next_state = None
             done = None
@@ -342,16 +339,16 @@ class Dummy(object):
 
 
                 #given the current top level constraint this should now allocate constraint weights accordingly
-                state_cost = torch.cat((state, upper_cost_constraint.detach()))
+                #state_cost = torch.cat((state, upper_cost_constraint.detach()))
 
-                cost_weight = self.cost_allocator(state_cost)
-                lower_cost_constraint = cost_weight[1] * (upper_cost_constraint.detach())
-                upper_cost_constraint = cost_weight[0] * (upper_cost_constraint.detach())
+                #cost_weight = self.cost_allocator(state_cost)
+                #lower_cost_constraint = cost_weight[1] * (upper_cost_constraint.detach())
+                #upper_cost_constraint = cost_weight[0] * (upper_cost_constraint.detach())
 
-                Cost_Alloc.append((lower_cost_constraint.item(), upper_cost_constraint.item()))
+                #Cost_Alloc.append((lower_cost_constraint.item(), upper_cost_constraint.item()))
+                current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
-
-                goal = self.pi_meta(state=state, cost=upper_cost_constraint.detach())
+                goal = self.pi_meta(state=state)
 
                 x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
                 Goals_t.append((x_g, y_g))
@@ -359,7 +356,7 @@ class Dummy(object):
 
                 goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
-                q_values_upper = self.dqn_meta(state_cost)
+                q_values_upper = self.dqn_meta(state)
                 Q_value_upper = q_values_upper.gather(0, goal[0])
 
                 #an indicator that is used to terminate the lower level episode
@@ -371,10 +368,10 @@ class Dummy(object):
                 goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
                 goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-                L = None
+                #L = None
                 #this will terminate of the current lower level episoded went beyond limit
-                prev_states_u = []
-                initial_state_for_CA = state  # this is the state goal cost used for optmization of cost allocator
+                #prev_states_u = []
+                #initial_state_for_CA = state  # this is the state goal cost used for optmization of cost allocator
 
                 while t_lower <= self.args.max_ep_len_l-1:
 
@@ -390,11 +387,9 @@ class Dummy(object):
 
 
                     for n_l in range(self.args.traj_len_l):
-                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, cost=lower_cost_constraint, d_low=lower_cost_constraint)
-                        state_goal_cost = torch.cat((torch.cat((state, goal_hot_vec)), lower_cost_constraint.detach()))
+                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
-
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
                                                                  goal_state=goal_hot_vec)
 
@@ -411,10 +406,8 @@ class Dummy(object):
                         #print(action)
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
                         #print(action, torch.LongTensor(action))
-                        current_cost = torch.FloatTensor(
-                            [info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(
-                            self.device)
-
+                        current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
+                        print(current_cost)
                         R += reward
 
                         #for training logging purposes
@@ -426,7 +419,7 @@ class Dummy(object):
 
                         state_goal = torch.cat((state, goal_hot_vec))
 
-                        q_values_lower = self.dqn_lower(state=state_goal_cost)
+                        q_values_lower = self.dqn_lower(state=state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
 
                         cost_values_lower = self.cost_lower_model(state=state_goal)
@@ -452,12 +445,10 @@ class Dummy(object):
                         prev_states_l.append(previous_state)
 
                         #break if goal is current_state or the if the main episode terminated
-
                         if done or done_l:
                             break
 
                         if t_lower > self.args.max_ep_len_l-1:
-
                             break
 
 
@@ -466,14 +457,14 @@ class Dummy(object):
 
 
                     next_state_goal = torch.cat((next_state, goal_hot_vec))
-                    next_state_goal_cost = torch.cat((torch.cat((next_state, goal_hot_vec)), lower_cost_constraint.detach()))
+                    #next_state_goal_cost = torch.cat((torch.cat((next_state, goal_hot_vec)), lower_cost_constraint.detach()))
 
-                    next_action = self.pi_lower(next_state, goal_hot_vec, lower_cost_constraint.detach())
+                    next_action = self.safe_deterministic_pi_lower(state=next_state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
 
                     #update Reward Q value function
 
-                    next_values = self.dqn_lower(next_state_goal_cost)
+                    next_values = self.dqn_lower(next_state_goal)
                     Next_Value = next_values.gather(0, next_action[0])
 
                     target_Q_values_lower = self.compute_n_step_returns(Next_Value, instrinc_rewards, done_masks_lower)
@@ -521,7 +512,7 @@ class Dummy(object):
 
 
 
-                prev_states_u.append(previous_state)
+                #prev_states_u.append(previous_state)
 
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
@@ -530,11 +521,11 @@ class Dummy(object):
                 CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
 
-                next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
+                #next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
 
-                next_goal = self.pi_meta(next_state, upper_cost_constraint.detach())
+                next_goal = self.pi_meta(next_state)
                 next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-                next_values = self.dqn_meta(next_state_cost)
+                next_values = self.dqn_meta(next_state)
                 Next_Value = next_values.gather(0, next_goal[0])
 
                 target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
@@ -546,6 +537,7 @@ class Dummy(object):
                 loss_upper.backward()
                 self.optimizer_meta.step()
 
+                """
 
                 #NEED to optimze for cost allocator
                 ###################################################################
@@ -566,7 +558,7 @@ class Dummy(object):
                 self.cost_allocator_optimizer.zero_grad()
                 cost_allocator_loss.backward()
                 self.cost_allocator_optimizer.step()
-
+                """
                 if done:
 
                     self.num_episodes += 1
@@ -622,7 +614,7 @@ class Dummy(object):
 
         upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-        upper_cost_constraint[0] = self.args.d0
+        lower_cost_constraint[0] = 10  #set cost manually
 
 
         with torch.no_grad():
@@ -640,34 +632,32 @@ class Dummy(object):
                 Goals = []
                 CS = []
                 while not done:
-
-
-
                     # convert the state to tensor
                     state = torch.FloatTensor(state).to(self.device)
 
-                    state_cost = torch.cat((state, upper_cost_constraint))
-                    cost_weight = self.cost_allocator(state_cost)
-                    lower_cost_constraint = cost_weight[1] * upper_cost_constraint
-                    upper_cost_constraint = cost_weight[0] * upper_cost_constraint
+                    #state_cost = torch.cat((state, upper_cost_constraint))
+                    #cost_weight = self.cost_allocator(state_cost)
+                    #lower_cost_constraint = cost_weight[1] * upper_cost_constraint
+                    #upper_cost_constraint = cost_weight[0] * upper_cost_constraint
 
                     # get the goal
-                    goal = self.pi_meta(state, upper_cost_constraint, greedy_eval=True)
+                    goal = self.pi_meta(state, greedy_eval=True)
 
                     x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
                     Goals.append((x_g, y_g))
 
                     goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
-
                     goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
                     goal_hot_vec = torch.FloatTensor(goal_hot_vec)
+
+                    current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
                     t_lower = 0
                     ir = 0
                     while t_lower <= self.args.max_ep_len_l:
 
-                        action = self.pi_lower(state, goal_hot_vec, lower_cost_constraint, greedy_eval=True)
+                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint, current_cost=current_cost, greedy_eval=True)
                         #print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                         #print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
@@ -676,6 +666,7 @@ class Dummy(object):
                         ep_len += 1
                         ep_constraint += info[self.cost_indicator]
 
+                        current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
                         """
                         NS = []
                         for i in range(4):

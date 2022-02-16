@@ -14,6 +14,7 @@ from agents.past.safe_sarsa_agent import SafeSarsaAgent
 from agents.past.lyp_sarsa_agent import LypSarsaAgent
 from agents.ours.hrl_sarsa_agent import HRL_Discrete_Goal_SarsaAgent
 from agents.ours.hrl_sarsa_agent_dummy import Dummy
+from agents.ours.hrl_safe_dummy_2 import Dummy_2
 from agents.ours.safe_lower_hrl_sarsa_agent import SAFE_LOWER_HRL_Discrete_Goal_SarsaAgent
 """
 # A2C based agents
@@ -115,7 +116,8 @@ elif args.agent == "hrl-sarsa":
     agent = HRL_Discrete_Goal_SarsaAgent(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "safe-lower-hrl-sarsa":
     #agent = SAFE_LOWER_HRL_Discrete_Goal_SarsaAgent(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
-    agent = Dummy(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+    #agent = Dummy(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+    agent =  Dummy_2(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
