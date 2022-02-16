@@ -251,10 +251,6 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             done_masks  = []
             constraints = []
 
-            values_upper = []
-            rewards_upper= []
-            done_masks   = []
-
             IR_t = []
             Goals_t = []
             CS_t = []
@@ -262,6 +258,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
             while not done:
             #for n_u in range(self.args.traj_len_u):
+                values_upper = []
+                rewards_upper = []
+                done_masks = []
+
 
 
                 previous_state = state
@@ -370,6 +370,22 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
                 CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
+
+                next_goal = self.pi_meta(next_state)
+                next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
+                next_values = self.dqn_meta(next_state)
+                Next_Value = next_values.gather(0, next_goal[0])
+
+                target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
+                Q_targets_upper = torch.cat(target_Q_values_upper).detach()
+                Q_values_upper = torch.cat(values_upper)
+
+                loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
+
+                self.optimizer_meta.zero_grad()
+                loss_upper.backward()
+                self.optimizer_meta.step()
+
                 if done:
 
                     self.num_episodes += 1
@@ -414,20 +430,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     break #this break is to terminate the higher tier episode as the episode is now over
 
 
-            next_goal = self.pi_meta(next_state)
-            next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-            next_values = self.dqn_meta(next_state)
-            Next_Value = next_values.gather(0, next_goal[0])
 
-            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
-            Q_targets_upper = torch.cat(target_Q_values_upper).detach()
-            Q_values_upper = torch.cat(values_upper)
-
-            loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
-
-            self.optimizer_meta.zero_grad()
-            loss_upper.backward()
-            self.optimizer_meta.step()
 
 
 
