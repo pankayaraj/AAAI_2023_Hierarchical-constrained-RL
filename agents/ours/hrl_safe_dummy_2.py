@@ -36,6 +36,8 @@ class Dummy_2(object):
         """
         init the agent here
         """
+        self.exp_no = exp_no
+        self.save_dir = save_dir
         args.num_envs = 1
         if goal_space == None:
             goal_space = args.goal_space
@@ -131,8 +133,8 @@ class Dummy_2(object):
         self.num_episodes = 0
 
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(100 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(50 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
@@ -272,11 +274,11 @@ class Dummy_2(object):
 
         log(
             'Num Episode {}\t'.format(self.num_episodes) + \
-            'E[R]: {:.2f}\t'.format(ep_reward) +\
-            'E[C]: {:.2f}\t'.format(ep_constraint) +\
             'avg_train_reward: {:.2f}\t'.format(np.mean(self.TRAIN_REWARDS[-100:])) +\
             'avg_train_constraint: {:.2f}\t'.format(np.mean(self.TRAIN_CONSTRAINTS[-100:]))
             )
+        #'E[R]: {:.2f}\t'.format(ep_reward) +\
+        #'E[C]: {:.2f}\t'.format(ep_constraint) +\
 
     def run(self):
         """
@@ -297,7 +299,7 @@ class Dummy_2(object):
         upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
         lower_cost_constraint[0] = 10 #manually set cost division for now
-
+        current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
         #total episode reward, length for logging purposes
         self.ep_reward = 0
@@ -346,7 +348,7 @@ class Dummy_2(object):
                 #upper_cost_constraint = cost_weight[0] * (upper_cost_constraint.detach())
 
                 #Cost_Alloc.append((lower_cost_constraint.item(), upper_cost_constraint.item()))
-                current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
 
                 goal = self.pi_meta(state=state)
 
@@ -407,7 +409,7 @@ class Dummy_2(object):
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
                         #print(action, torch.LongTensor(action))
                         current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
-                        print(current_cost)
+
                         R += reward
 
                         #for training logging purposes
@@ -573,6 +575,8 @@ class Dummy_2(object):
 
                     #evaluation logging
                     if self.num_episodes % self.args.eval_every == 0:
+                        self.save() #save models
+
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
 
                         print("Epsilon Upper and Lower:" + str(self.eps_u) +", " + str(self.eps_l))
@@ -585,14 +589,16 @@ class Dummy_2(object):
 
                         log('----------------------------------------')
                         log("Intrisic Reward: " + str(IR) + " Goal: " + str(Goals) + " Current State: " + str(CS))
-                        log('Eval[R]: {:.2f}\t'.format(eval_reward) + \
-                            'Eval[C]: {}\t'.format(eval_constraint) + \
+                        log(
                             'Episode: {}\t'.format(self.num_episodes) + \
                             'avg_eval_reward: {:.2f}\t'.format(np.mean(self.EVAL_REWARDS[-10:])) + \
                             'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.EVAL_CONSTRAINTS[-10:]))
                             )
                         log('----------------------------------------')
-
+                    """
+                    'Eval[R]: {:.2f}\t'.format(eval_reward) + \
+                    'Eval[C]: {}\t'.format(eval_constraint) + \
+                    """
                     # resting episode rewards
                     self.ep_reward = 0
                     self.ep_len = 0
@@ -622,6 +628,9 @@ class Dummy_2(object):
 
                 state = self.eval_env.reset()
                 previous_state = torch.FloatTensor(state)
+                current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
+
                 done = False
                 ep_reward = 0
                 ep_constraint = 0
@@ -651,7 +660,7 @@ class Dummy_2(object):
                     goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
                     goal_hot_vec = torch.FloatTensor(goal_hot_vec)
 
-                    current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
 
                     t_lower = 0
                     ir = 0
@@ -706,4 +715,12 @@ class Dummy_2(object):
         return np.mean(avg_reward), np.mean(avg_constraint), IR, Goals, CS
 
 
+    def save(self):
+        path = self.save_dir + "z" + self.exp_no
 
+        torch.save(self.dqn_meta.state_dict, path + "_rq_meta")
+        torch.save(self.dqn_lower.state_dict, path + "_rq_lower")\
+
+        torch.save(self.cost_lower_model.state_dict, path + "_cq_lower")
+        torch.save(self.review_lower_model, path + "_cv_meta")
+        torch.save(self.cost_allocator, path + "_ca_meta")
