@@ -133,8 +133,8 @@ class Dummy_2(object):
         self.num_episodes = 0
 
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
@@ -587,14 +587,14 @@ class Dummy_2(object):
                         torch.save(self.EVAL_REWARDS, self.r_path)
                         torch.save(self.EVAL_CONSTRAINTS, self.c_path)
 
-                        log('----------------------------------------')
+                        log('--------------------------------------------------------------------------------------------------------')
                         log("Intrisic Reward: " + str(IR) + " Goal: " + str(Goals) + " Current State: " + str(CS))
                         log(
                             'Episode: {}\t'.format(self.num_episodes) + \
                             'avg_eval_reward: {:.2f}\t'.format(np.mean(self.EVAL_REWARDS[-10:])) + \
                             'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.EVAL_CONSTRAINTS[-10:]))
                             )
-                        log('----------------------------------------')
+                        log('--------------------------------------------------------------------------------------------------------')
                     """
                     'Eval[R]: {:.2f}\t'.format(eval_reward) + \
                     'Eval[C]: {}\t'.format(eval_constraint) + \
@@ -711,7 +711,7 @@ class Dummy_2(object):
                 avg_constraint.append(ep_constraint)
 
 
-
+        print(avg_reward, avg_constraint)
         return np.mean(avg_reward), np.mean(avg_constraint), IR, Goals, CS
 
 
