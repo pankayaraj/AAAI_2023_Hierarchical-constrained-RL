@@ -97,7 +97,7 @@ def get_args():
     # Evaluation arguments
     parser.add_argument('--eval-every', type=float, default=1000,
                         help="eval after these many steps")
-    parser.add_argument('--eval-n', type=int, default=1,
+    parser.add_argument('--eval-n', type=int, default=3,
                         help="average eval results over these many episodes")
 
     # Experiment specific
