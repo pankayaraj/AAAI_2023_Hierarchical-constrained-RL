@@ -58,7 +58,8 @@ class Dummy_2(object):
         self.args = args
 
         #for the time being let's skip the vectorized environment's added complexity in HRL
-        self.env = create_env(args)
+        self.env = env
+
         self.G = Goal_Space(goal_space=goal_space, grid_size=self.env.size)
         self.grid_size = self.env.size
 
@@ -68,6 +69,7 @@ class Dummy_2(object):
         print(c)
 
         self.eval_env = copy.deepcopy(env)
+
 
         s = env.reset()
         self.state_dim = s.shape
@@ -133,7 +135,7 @@ class Dummy_2(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(150000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -294,10 +296,8 @@ class Dummy_2(object):
         previous_state = state
 
 
-        upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-        lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-        lower_cost_constraint[0] = 10 #manually set cost division for now
-        current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
+
 
         #total episode reward, length for logging purposes
         self.ep_reward = 0
@@ -307,6 +307,12 @@ class Dummy_2(object):
 
 
         while self.num_episodes < self.args.num_episodes:
+
+            upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
+            lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
+            lower_cost_constraint[0] = 10  # manually set cost division for now
+            current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+
 
             #upper_cost_constraint[0] = self.args.d0
 
@@ -613,101 +619,90 @@ class Dummy_2(object):
         """
                     evaluate the current policy and log it
                     """
+
         avg_reward = []
-        avg_constraint = []
+        avg_constraint  = []
 
-        upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
+        state = self.eval_env.reset()
+        previous_state = torch.FloatTensor(state)
+        done = False
+        ep_reward = 0
+        ep_constraint = 0
+        ep_len = 0
+        start_time = time.time()
+
+        IR = []
+        Goals = []
+        CS = []
+
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-        lower_cost_constraint[0] = 10  #set cost manually
+        lower_cost_constraint[0] = 10  # manually set cost division for now
+        current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
+        while not done:
 
-        with torch.no_grad():
-            for _ in range(self.args.eval_n):
+            # convert the state to tensor
+            state = torch.FloatTensor(state).to(self.device)
 
-                state = self.eval_env.reset()
-                previous_state = torch.FloatTensor(state)
-                current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
+            # get the goal
+            goal = self.pi_meta(state=state, greedy_eval=True)
 
+            x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
+            Goals.append((x_g, y_g))
 
-                done = False
-                ep_reward = 0
-                ep_constraint = 0
-                ep_len = 0
-                start_time = time.time()
+            goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
-                IR = []
-                Goals = []
-                CS = []
-                while not done:
-                    # convert the state to tensor
-                    state = torch.FloatTensor(state).to(self.device)
+            goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+            goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-                    #state_cost = torch.cat((state, upper_cost_constraint))
-                    #cost_weight = self.cost_allocator(state_cost)
-                    #lower_cost_constraint = cost_weight[1] * upper_cost_constraint
-                    #upper_cost_constraint = cost_weight[0] * upper_cost_constraint
+            t_lower = 0
+            ir = 0
+            while t_lower <= self.args.max_ep_len_l-1:
 
-                    # get the goal
-                    goal = self.pi_meta(state, greedy_eval=True)
+                action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost, greedy_eval=True)
+                # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
+                # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
-                    x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-                    Goals.append((x_g, y_g))
+                next_state, reward, done, info = self.eval_env.step(action.item())
+                ep_reward += reward
+                ep_len += 1
+                ep_constraint += info[self.cost_indicator]
 
-                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                """
+                NS = []
+                for i in range(4):
+                    NS.append(self.eval_env.step(i)[0])
 
-                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                    goal_hot_vec = torch.FloatTensor(goal_hot_vec)
+                T = []
+                for ts in NS:
+                    T.append(torch.equal(state, torch.FloatTensor(ts)))
+                print(T)
+                """
+                next_state = torch.FloatTensor(next_state).to(self.device)
 
+                # update the state
+                previous_state = state
+                state = next_state
 
+                current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
 
-                    t_lower = 0
-                    ir = 0
-                    while t_lower <= self.args.max_ep_len_l:
+                instrinc_reward = self.G.intrisic_reward(current_state=next_state,
+                                                         goal_state=goal_hot_vec)
+                ir += instrinc_reward
+                t_lower += 1
 
-                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint, current_cost=current_cost, greedy_eval=True)
-                        #print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
-                        #print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
+                done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+                if done_l or done:
+                    break
 
-                        next_state, reward, done, info = self.eval_env.step(action.item())
-                        ep_reward += reward
-                        ep_len += 1
-                        ep_constraint += info[self.cost_indicator]
+            IR.append(ir)
 
-                        current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
-                        """
-                        NS = []
-                        for i in range(4):
-                            NS.append(self.eval_env.step(i)[0])
+            x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
 
-                        T = []
-                        for ts in NS:
-                            T.append(torch.equal(state, torch.FloatTensor(ts)))
-                        print(T)
-                        """
-                        next_state = torch.FloatTensor(next_state).to(self.device)
+            CS.append((x_c, y_c))
 
-                        # update the state
-                        previous_state = state
-                        state = next_state
-
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
-                        ir += instrinc_reward
-                        t_lower += 1
-
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
-                        if done_l or done:
-                            break
-
-                    IR.append(ir)
-
-                    x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
-
-                    CS.append((x_c, y_c))
-
-                avg_reward.append(ep_reward)
-                avg_constraint.append(ep_constraint)
-
+        avg_reward.append(ep_reward)
+        avg_constraint.append(ep_constraint)
 
         #print(avg_reward, avg_constraint)
         return np.mean(avg_reward), np.mean(avg_constraint), IR, Goals, CS
@@ -716,19 +711,20 @@ class Dummy_2(object):
     def save(self):
         path = self.save_dir + "z" + self.exp_no
 
-        torch.save(self.dqn_meta.state_dict, path + "_rq_meta")
-        torch.save(self.dqn_lower.state_dict, path + "_rq_lower")\
+        torch.save(self.dqn_meta.state_dict(), path + "_rq_meta")
+        torch.save(self.dqn_lower.state_dict(), path + "_rq_lower")
 
-        torch.save(self.cost_lower_model.state_dict, path + "_cq_lower")
-        torch.save(self.review_lower_model, path + "_cv_meta")
-        torch.save(self.cost_allocator, path + "_ca_meta")
+        torch.save(self.cost_lower_model.state_dict(), path + "_cq_lower")
+        torch.save(self.review_lower_model.state_dict(), path + "_cv_meta")
+        torch.save(self.cost_allocator.state_dict(), path + "_ca_meta")
 
     def load(self):
+
         path = self.save_dir + "z" + self.exp_no
+        print(path)
+        self.dqn_meta.load_state_dict(torch.load(path + "_rq_meta"))
+        self.dqn_lower.load_state_dict(torch.load( path + "_rq_lower"))
 
-        torch.load(self.dqn_meta.state_dict, path + "_rq_meta")
-        torch.load(self.dqn_lower.state_dict, path + "_rq_lower")
-
-        torch.load(self.cost_lower_model.state_dict, path + "_cq_lower")
-        torch.load(self.review_lower_model, path + "_cv_meta")
-        torch.load(self.cost_allocator, path + "_ca_meta")
+        self.cost_lower_model.load_state_dict(torch.load( path + "_cq_lower"))
+        self.review_lower_model.load_state_dict(torch.load(path + "_cv_meta"))
+        self.cost_allocator.load_state_dict(torch.load(path + "_ca_meta"))
