@@ -99,7 +99,7 @@ C_k_std = np.std(C_k_avg, axis=0)
 
 
 x = [i for i in range(len(R_safe_mean))]
-legend = ["sarsa", "bvf-safe-sarsa-eps", "hrl-sarsa", "hrl_safe_low_level_sarsa" ]
+legend = ["sarsa", "bvf-safe-sarsa-eps", "hrl-sarsa", "hrl-safe-low-level-sarsa-manual-cost-alloc" ]
 
 fig, ax = plt.subplots(1, 1, figsize=(20, 10))
 plt.tick_params(axis='both', which='major', labelsize=30)
@@ -148,6 +148,6 @@ plt.ylabel("Constraints", size=40)
 plt.title("Constraint comparision for the Grid World Environment with a key", size=40)
 name = "figures/grid/Constraints_Key"
 
-ax.set_ylim(0, 1000)
+ax.set_ylim(0, 300)
 plt.savefig(name)
 plt.close(fig)

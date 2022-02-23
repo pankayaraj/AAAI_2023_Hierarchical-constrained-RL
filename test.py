@@ -13,9 +13,9 @@ from agents.past.sarsa_agent import SarsaAgent
 from agents.past.safe_sarsa_agent import SafeSarsaAgent
 from agents.past.lyp_sarsa_agent import LypSarsaAgent
 from agents.ours.hrl_sarsa_agent import HRL_Discrete_Goal_SarsaAgent
-from agents.ours.hrl_sarsa_agent_dummy import Dummy
-from agents.ours.hrl_safe_dummy_2 import Dummy_2
-from agents.ours.safe_lower_hrl_sarsa_agent import SAFE_LOWER_HRL_Discrete_Goal_SarsaAgent
+
+from agents.ours.hrl_safe_with_global_costraints import HRL_Discrete_Safe_Global_Constraint
+from agents.ours.hrl_safe_lower_with_manual_constraint import HRL_Discrete_Safe_Lower_Manual_Constraints
 """
 # A2C based agents
 from agents.a2c_agent import A2CAgent
@@ -83,7 +83,7 @@ elif args.agent == "lyp-a2c":
 """
 
 from multiprocessing import freeze_support, set_start_method
-args.exp_no = "2"
+args.exp_no = "7"
 greedy_eval = True
 # don't use tb on cluster
 tb_writer = None
@@ -101,7 +101,8 @@ elif args.agent == "hrl-sarsa":
 elif args.agent == "safe-lower-hrl-sarsa":
     #agent = SAFE_LOWER_HRL_Discrete_Goal_SarsaAgent(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
     #agent = Dummy(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
-    agent =  Dummy_2(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+    #agent =  HRL_Discrete_Safe_Global_Constraint(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+    agent =  HRL_Discrete_Safe_Lower_Manual_Constraints(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
@@ -140,7 +141,7 @@ for i in range(5):
 
                 # convert the state to tensor
         state = torch.FloatTensor(state).to(agent.device)
-
+        ps = state
                 # get the goal
         goal = agent.pi_meta(state=state, greedy_eval=greedy_eval)
 
@@ -154,11 +155,14 @@ for i in range(5):
 
         t_lower = 0
         ir = 0
+        C = 0
+        R = 0
+        print(C)
         while t_lower <= agent.args.max_ep_len_l-1:
 
-            action = agent.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost, greedy_eval=greedy_eval)
-                        # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
-                        # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
+            #action = agent.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal,  current_cost=current_cost, greedy_eval=greedy_eval)
+            action = agent.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint,
+                                                       current_cost=current_cost, greedy_eval=greedy_eval)
 
             next_state, reward, done, info = agent.eval_env.step(action.item())
             ep_reward += reward
@@ -174,8 +178,14 @@ for i in range(5):
 
             current_cost = torch.FloatTensor([info[agent.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(agent.device)
 
+
+
             instrinc_reward = agent.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                                                          goal_state=goal_hot_vec)
+
+            C += info[agent.cost_indicator]
+            R += instrinc_reward
+
             ir += instrinc_reward
             t_lower += 1
 
@@ -187,7 +197,12 @@ for i in range(5):
         x_c, y_c = agent.G.convert_value_to_coordinates(agent.G.convert_hot_vec_to_value(next_state).item())
         CS.append((x_c, y_c))
 
+        psg = torch.cat((ps, goal_hot_vec))
+        print(agent.cost_lower_model(psg), C, goal)
+        print(agent.dqn_lower(psg), R)
+
     avg_reward.append(ep_reward)
     avg_constraint.append(ep_constraint)
 
-print(avg_reward, avg_constraint, Goals, CS, Goals)
+
+print(avg_reward, avg_constraint, Goals, CS,)

@@ -294,7 +294,9 @@ class SafeSarsaAgent(object):
         ep_constraint = 0
         start_time = time.time()
 
-
+        C = 0
+        psg = state
+        done = False
         while self.num_episodes < self.args.num_episodes:
 
             values      = []
@@ -310,6 +312,7 @@ class SafeSarsaAgent(object):
             done_masks  = []
             begin_masks = []
             constraints = []
+
 
 
             # n-step sarsa
@@ -336,6 +339,7 @@ class SafeSarsaAgent(object):
                 ep_reward += reward[0]
                 ep_constraint += info[0][self.cost_indicator]
 
+                C += info[0][self.cost_indicator]
 
                 values.append(Q_value)
                 c_r_vals.append(cost_r_val)
@@ -376,6 +380,8 @@ class SafeSarsaAgent(object):
                         ep_constraint = 0
 
                     self.num_episodes += 1
+
+
 
                     # eval the policy here after eval_every steps
                     if self.num_episodes  % self.args.eval_every == 0:

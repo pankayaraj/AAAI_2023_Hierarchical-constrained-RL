@@ -11,8 +11,8 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_lower_hrl_sarsa_key/")
-    parser.add_argument('--exp_no', type=str, default="8")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_global_hrl_sarsa_key/")
+    parser.add_argument('--exp_no', type=str, default="4")
     parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for dicrete goal setting in an HRL setup
     #[212, 86, 160, 163, 282, 135, 200]
     parser.add_argument('--env-name', default='pg',
