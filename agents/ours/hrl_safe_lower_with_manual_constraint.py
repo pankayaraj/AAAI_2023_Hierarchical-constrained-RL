@@ -310,7 +310,7 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
 
             upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
             lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-            lower_cost_constraint[0] = 10  # manually set cost division for now
+            lower_cost_constraint[0] = 30  # manually set cost division for now
             current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
 
@@ -636,7 +636,7 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
         CS = []
 
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
-        lower_cost_constraint[0] = 10  # manually set cost division for now
+        lower_cost_constraint[0] = 30  # manually set cost division for now
         current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
         while not done:

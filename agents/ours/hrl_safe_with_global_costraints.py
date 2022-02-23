@@ -146,8 +146,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(200000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(200000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
@@ -229,7 +229,6 @@ class HRL_Discrete_Safe_Global_Constraint(object):
 
                 cost_q_val_upper = self.cost_upper_model(state).gather(0, goal_discrete[0])
                 cost_r_val_upper = self.review_upper_model(state)
-
 
 
                 quantity_1 = cost_q_val_upper + cost_r_val_upper
@@ -425,7 +424,6 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                             begin_mask_l = True
                         else:
                             begin_mask_l = False
-
 
 
                         next_state = torch.FloatTensor(next_state).to(self.device)
