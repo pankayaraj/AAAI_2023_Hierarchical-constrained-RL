@@ -23,6 +23,7 @@ SarsaTransition = namedtuple('Transition', ('state', 'action', 'reward', 'next_s
                                        'next_action', 'done',))
 
 
+
 FullTransition = namedtuple('FullTransition', ('state', 'action', 'reward', 'cost',
                                                'next_state', 'done', 'next_action',
                                                'prev_state', 'begin'))
