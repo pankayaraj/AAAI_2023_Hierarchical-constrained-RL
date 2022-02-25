@@ -600,7 +600,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
 
                 if done:
 
-                    self.num_episodes += 1
+
 
                     #training logging
                     if self.num_episodes % 100 == 0:
@@ -611,7 +611,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                         #log("No of Higher Eps: " +  str(len(Goals_t)) + " No of lower eps: " + str(T_t)  + " Cost Allocation(future, lower) " + str(Cost_Alloc))
 
                     #evaluation logging
-                    if self.num_episodes % self.args.eval_every == 0:
+                    if self.num_episodes % self.args.eval_every == 0 :
                         self.save() #save models
 
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
@@ -632,10 +632,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                             'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.EVAL_CONSTRAINTS[-10:]))
                             )
                         log('--------------------------------------------------------------------------------------------------------')
-                    """
-                    'Eval[R]: {:.2f}\t'.format(eval_reward) + \
-                    'Eval[C]: {}\t'.format(eval_constraint) + \
-                    """
+
+                    self.num_episodes += 1
                     # resting episode rewards
                     self.ep_reward = 0
                     self.ep_len = 0
@@ -657,7 +655,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         avg_constraint  = []
 
         state = self.eval_env.reset()
-        previous_state = torch.FloatTensor(state)
+        previous_state = torch.FloatTensor(state).to(self.device)
+        state = torch.FloatTensor(state).to(self.device)
         done = False
         ep_reward = 0
         ep_constraint = 0
@@ -674,7 +673,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         while not done:
 
             # convert the state to tensor
-            state = torch.FloatTensor(state).to(self.device)
+
 
             # get the goal
             goal = self.pi_meta(state=state, greedy_eval=True)
