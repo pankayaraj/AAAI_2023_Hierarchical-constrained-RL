@@ -449,6 +449,9 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                         q_values_lower = self.dqn_lower(state=state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
 
+                        if t_lower == 0:
+                            constraints_upper.append(Q_value_lower)
+
                         cost_values_lower = self.cost_lower_model(state=state_goal)
                         Cost_value = cost_values_lower.gather(0, action[0])
                         Review_value_lower = self.review_lower_model(state=state_goal)
@@ -542,7 +545,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
 
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
-                constraints_upper.append(C)
+                #constraints_upper.append(C)
                 cost_q_upper.append(Cost_value_Upper)
                 cost_r_upper.append(Review_value_Upper)
                 done_masks.append((1 - done))

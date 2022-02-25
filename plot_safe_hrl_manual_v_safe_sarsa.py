@@ -18,6 +18,9 @@ R_HRL_90 = []
 C_HRL_90 = []
 
 
+
+
+
 for i in range(no_experiments):
     R_60.append(torch.load("results/grid/safe_sarsa_key/60/r" + str(i + 1))[:l])
     C_60.append(torch.load("results/grid/safe_sarsa_key/60/c" + str(i + 1))[0:l])
@@ -131,7 +134,7 @@ plt.fill_between(x, R_mean_HRL_60 + R_std_HRL_60, R_mean_HRL_60 - R_std_HRL_60, 
 plt.legend( prop={'size':40}, loc='upper left')
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Reward", size=40)
-plt.title("Reward comparision for the Grid World Environment with a key with a constriant limit of 60", size=40)
+plt.title("Reward comparision with a constriant limit of 60", size=40)
 name = "figures/grid/comp/Rewards_Key_60"
 plt.savefig(name)
 plt.close(fig)
@@ -149,7 +152,7 @@ plt.fill_between(x, R_mean_HRL_90 + R_std_HRL_90, R_mean_HRL_90 - R_std_HRL_90, 
 plt.legend( prop={'size':40}, loc='upper left')
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Reward", size=40)
-plt.title("Reward comparision for the Grid World Environment with a key with a constriant limit of 90", size=40)
+plt.title("Reward comparision with a constriant limit of 90", size=40)
 name = "figures/grid/comp/Rewards_Key_90"
 plt.savefig(name)
 plt.close(fig)
@@ -164,11 +167,11 @@ plt.fill_between(x, C_mean_60 + C_std_60, C_mean_60 - C_std_60, alpha = 0.3)
 plt.plot(C_mean_HRL_60, label=legend[1], linewidth=3)
 plt.fill_between(x, C_mean_HRL_60 + C_std_HRL_60, C_mean_HRL_60 - C_std_HRL_60, alpha = 0.3)
 
-plt.axhline(y=20, color='r', linestyle='--')
+plt.axhline(y=60, color='r', linestyle='--')
 plt.legend(prop={'size':40}, loc='upper left')
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Constraints", size=40)
-plt.title("Constraint comparision for the Grid World Environment with a key with a constriant limit of 60", size=40)
+plt.title("Constraint comparision with a constriant limit of 60", size=40)
 name = "figures/grid/comp/Constraints_Key_60"
 
 ax.set_ylim(0, 150)
@@ -185,11 +188,11 @@ plt.fill_between(x, C_mean_90 + C_std_90, C_mean_90 - C_std_90, alpha = 0.3)
 plt.plot(C_mean_HRL_90, label=legend[1], linewidth=3)
 plt.fill_between(x, C_mean_HRL_90 + C_std_HRL_90, C_mean_HRL_90 - C_std_HRL_90, alpha = 0.3)
 
-plt.axhline(y=20, color='r', linestyle='--')
+plt.axhline(y=90, color='r', linestyle='--')
 plt.legend(prop={'size':40}, loc='upper left')
 plt.xlabel('No of episodes X1000', size=40)
 plt.ylabel("Constraints", size=40)
-plt.title("Constraint comparision for the Grid World Environment with a key with a constriant limit of 90", size=40)
+plt.title("Constraint comparision with a constriant limit of 90", size=40)
 name = "figures/grid/comp/Constraints_Key_90"
 
 ax.set_ylim(0, 150)
