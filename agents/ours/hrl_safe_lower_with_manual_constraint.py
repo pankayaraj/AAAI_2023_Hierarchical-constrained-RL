@@ -605,7 +605,7 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
                     """
 
                     self.num_episodes += 1
-                    
+
                     # resting episode rewards
                     self.ep_reward = 0
                     self.ep_len = 0
@@ -628,7 +628,7 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
 
         state = self.eval_env.reset()
         state = torch.FloatTensor(state).to(self.device)
-        previous_state = torch.FloatTensor(state).to(self.device)
+        previous_state = state
         done = False
         ep_reward = 0
         ep_constraint = 0
