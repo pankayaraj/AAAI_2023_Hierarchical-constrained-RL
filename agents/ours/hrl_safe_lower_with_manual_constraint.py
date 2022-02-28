@@ -567,7 +567,7 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
                 """
                 if done:
 
-                    self.num_episodes += 1
+
 
                     #training logging
                     if self.num_episodes % 100 == 0:
@@ -603,6 +603,9 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
                     'Eval[R]: {:.2f}\t'.format(eval_reward) + \
                     'Eval[C]: {}\t'.format(eval_constraint) + \
                     """
+
+                    self.num_episodes += 1
+                    
                     # resting episode rewards
                     self.ep_reward = 0
                     self.ep_len = 0
@@ -624,7 +627,8 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
         avg_constraint  = []
 
         state = self.eval_env.reset()
-        previous_state = torch.FloatTensor(state)
+        state = torch.FloatTensor(state).to(self.device)
+        previous_state = torch.FloatTensor(state).to(self.device)
         done = False
         ep_reward = 0
         ep_constraint = 0
@@ -642,7 +646,6 @@ class HRL_Discrete_Safe_Lower_Manual_Constraints(object):
         while not done:
 
             # convert the state to tensor
-            state = torch.FloatTensor(state).to(self.device)
 
             # get the goal
             goal = self.pi_meta(state=state, greedy_eval=True)
