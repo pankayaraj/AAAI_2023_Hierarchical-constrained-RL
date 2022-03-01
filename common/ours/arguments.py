@@ -118,22 +118,4 @@ def get_args():
 
     return args
 
-    # DQN specific arguments
-    # parser.add_argument('--eps-decay-steps',type=int, default=10000,
-    #                     help="eps decay rate in num of episodes (1/decay_rate)")
-    # parser.add_argument('--prioritized', action='store_true',
-    #                         help="If true use the prioritized buffer")
-    # parser.add_argument('--beta-decay-steps',type=int, default=100,
-    #                     help="eps decay rate in num of episodes (1/decay_rate)")
-    # parser.add_argument('--beta-start', type=float, default=0.4,
-    #                         help="the intial beta for the IS correction")
 
-    # parser.add_argument('--dqn-target-update',type=int, default=1000,
-    #                     help="number of steps after which to update the target dqn")
-    # Safe_DQN stuff
-    # parser.add_argument('--pi-update-steps',type=int, default=10,
-    #                     help="number of times to run the inner optimization loop")
-
-    # parser.add_argument('--max-grad-norm', type=float, default=5.0, help='max norm of gradients (default: 0.5)')
-    # parser.add_argument('--ou-sigma', type=float, default=0.2, help="std for ou noise")
-    # parser.add_argument('--replay-size', type=int, default=10000, help='size of replay buffer (default: 10000)')
