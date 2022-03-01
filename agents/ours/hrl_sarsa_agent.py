@@ -445,7 +445,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             for _ in range(self.args.eval_n):
 
                 state = self.eval_env.reset()
-                previous_state = torch.FloatTensor(state)
+                state = torch.FloatTensor(state).to(self.device)
+                previous_state = state
                 done = False
                 ep_reward = 0
                 ep_constraint = 0
@@ -458,7 +459,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 while not done:
 
                     # convert the state to tensor
-                    state = torch.FloatTensor(state).to(self.device)
+
 
                     # get the goal
                     goal = self.pi_meta(state, greedy_eval=True)
@@ -470,7 +471,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
 
                     goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                    goal_hot_vec = torch.FloatTensor(goal_hot_vec)
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
                     t_lower = 0
                     ir = 0
