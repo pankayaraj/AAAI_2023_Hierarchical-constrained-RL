@@ -50,8 +50,10 @@ for i in range(no_experiments):
     #R_k.append(torch.load("results/grid/hrl_sarsa_key/r" + str(i + 1))[:l])
     #C_k.append(torch.load("results/grid/hrl_sarsa_key/c" + str(i + 1))[0:l])
 
+
 R_avg_60 = []
 C_avg_60 = []
+
 
 #R_avg_90 = []
 #C_avg_90 = []
@@ -139,7 +141,6 @@ for j in range(len(R_60)):
     #R_k_avg.append(r_k_avg)
     #C_k_avg.append(c_k_avg)
 
-
 R_avg_60 = np.array(R_avg_60)
 C_avg_60 = np.array(C_avg_60)
 #R_avg_90 = np.array(R_avg_90)
@@ -188,7 +189,7 @@ C_std_HRL_G_60 = np.std(C_avg_HRL_G_60, axis=0)
 
 x = [i for i in range(len(R_mean_60))]
 legend = ["bvf-safe-sarsa", "hrl-safe-l-c-alloc", "hrl-safe-global-bvf", "unsafe_hrl"]
-
+print(len(R_mean_60), len(R_mean_HRL_G_60))
 
 
 fig, ax = plt.subplots(1, 1, figsize=(20, 10))
