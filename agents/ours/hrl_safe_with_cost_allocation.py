@@ -25,10 +25,10 @@ from common.past.schedules import LinearSchedule, ExponentialSchedule
 
 # we define goal action space as follows: for each goal what are the corresponding values for all cost. Then goes on
 #its like g1c1, g1c2, g1c3, g2c1, g2c2, g2c3
-def get_goal_cost(index, goal_dim, cost_mapping, device):
+def get_goal_cost(index, goal_dim, C, device):
     goal_index = index//goal_dim
     cost_index = index%goal_dim
-    cost = cost_mapping[cost_index]
+    cost = C.get_cost_weight(cost_index)
 
     goal = torch.LongTensor(np.array([goal_index])).unsqueeze(1).to(device)
     cost = torch.LongTensor(np.array([cost])).unsqueeze(1).to(device)
@@ -380,7 +380,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
 
                 goal_cost = self.pi_meta(state=state)
-                goal, lower_cost_constraint = get_goal_cost(goal_cost[0], self.goal_dim, self.device)
+                goal, lower_cost_constraint = get_goal_cost(index=goal_cost[0], goal_dim=self.goal_dim, C=self.C,
+                                                            device=self.device)
                 goal_cost = torch.LongTensor(goal_cost).unsqueeze(1).to(self.device)
 
 
@@ -674,7 +675,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
             # get the goal
             goal_cost = self.pi_meta(state=state, greedy_eval=True)
-            goal, lower_cost_constraint = get_goal_cost(goal_cost[0], self.goal_dim, self.device)
+            goal, lower_cost_constraint = get_goal_cost(index=goal_cost[0], goal_dim=self.goal_dim, C=self.C,
+                                                        device=self.device)
             goal_cost = torch.LongTensor(goal_cost).unsqueeze(1).to(self.device)
 
             x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
