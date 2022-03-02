@@ -16,6 +16,7 @@ from agents.ours.hrl_sarsa_agent import HRL_Discrete_Goal_SarsaAgent
 
 from agents.ours.hrl_safe_lower_with_manual_constraint import HRL_Discrete_Safe_Lower_Manual_Constraints
 from agents.ours.hrl_safe_with_global_costraints import HRL_Discrete_Safe_Global_Constraint
+from agents.ours.hrl_safe_with_global_constraints_dual import HRL_Discrete_Safe_Global_Constraint_Dual
 
 """
 # A2C based agents
@@ -119,6 +120,8 @@ elif args.agent == "safe-lower-hrl-sarsa":
     agent =  HRL_Discrete_Safe_Lower_Manual_Constraints(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "safe-global-hrl-sarsa":
     agent = HRL_Discrete_Safe_Global_Constraint(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+elif args.agent == "safe-dual-global-hrl-sarsa":
+    agent = HRL_Discrete_Safe_Global_Constraint_Dual(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
