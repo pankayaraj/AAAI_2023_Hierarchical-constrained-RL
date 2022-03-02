@@ -94,7 +94,7 @@ class Cost_Space():
         self.cost_shape = (len(cost_space), 1)
 
     def get_cost_weight(self, cost_index):
-
+       
         return self.cost_mapping[cost_index]
 
 
