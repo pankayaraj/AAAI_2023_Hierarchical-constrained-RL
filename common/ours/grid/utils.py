@@ -83,6 +83,21 @@ class Goal_Space():
     def convert_hot_vec_to_value(self, hot_vec):
         return torch.argmax(hot_vec)
 
+
+class Cost_Space():
+
+    def __init__(self, cost_space, cost_mapping):
+
+        self.cost_space = cost_space
+        self.cost_mapping = cost_mapping
+
+        self.cost_shape = (len(cost_space), 1)
+
+    def get_cost_weight(self, cost_index):
+
+        return self.cost_mapping[cost_index]
+
+
 """
 G = Goal_Space([1,10], 9)
 print(convert_int_to_coordinates(34, 9))

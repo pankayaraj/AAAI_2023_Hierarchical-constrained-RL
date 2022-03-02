@@ -11,9 +11,12 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_dual_global_hrl_sarsa_key/")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_cost_alloc_lower_hrl_sarsa_key/")
     parser.add_argument('--exp_no', type=str, default="3")
-    parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for dicrete goal setting in an HRL setup
+    parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for discrete goal setting in an HRL setup
+    parser.add_argument("--cost_space", type=list, default=[0, 1, 2, 3])  # this is for discrete cost space
+    parser.add_argument("--cost_mapping", type=list, default=[0.0, 0.3, 0.6, 0.9])  # this is for discrete cost space
+
     #[212, 86, 160, 163, 282, 135, 200]
     parser.add_argument('--env-name', default='pg',
                         help="pg: point gather env\n"\

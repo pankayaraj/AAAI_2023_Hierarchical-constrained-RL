@@ -103,3 +103,4 @@ class OneHotCostAllocator(nn.Module):
         cost_weights = self.cost_allocator(inp)
 
         return cost_weights
+
