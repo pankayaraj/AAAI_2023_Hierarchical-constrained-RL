@@ -11,12 +11,30 @@ def get_args():
     # Env
     parser = argparse.ArgumentParser(description='collect arguments')
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_global_hrl_sarsa_key/")
+    parser.add_argument('--exp_no', type=str, default="5")
+    parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for dicrete goal setting in an HRL setup
+=======
+=======
+>>>>>>> 084226d0c16e822dff78e2ab976e836a70a26810
+>>>>>>> Stashed changes
     parser.add_argument('--save_dir', type=str, default="results/grid/safe_cost_alloc_lower_hrl_sarsa_key/")
     parser.add_argument('--exp_no', type=str, default="3")
     parser.add_argument("--goal_space", type=list, default=[212, 86, 160, 163, 282, 135, 200])  #this is for discrete goal setting in an HRL setup
     parser.add_argument("--cost_space", type=list, default=[0, 1, 2, 3])  # this is for discrete cost space
     parser.add_argument("--cost_mapping", type=list, default=[0.0, 0.3, 0.6, 0.9])  # this is for discrete cost space
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+>>>>>>> 084226d0c16e822dff78e2ab976e836a70a26810
+=======
+>>>>>>> 084226d0c16e822dff78e2ab976e836a70a26810
+>>>>>>> Stashed changes
     #[212, 86, 160, 163, 282, 135, 200]
     parser.add_argument('--env-name', default='pg',
                         help="pg: point gather env\n"\

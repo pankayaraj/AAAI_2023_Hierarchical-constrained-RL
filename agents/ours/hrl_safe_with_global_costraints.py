@@ -146,8 +146,11 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        #self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
+        #self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+
+        self.eps_u_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
