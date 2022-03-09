@@ -25,16 +25,17 @@ from common.past.schedules import LinearSchedule, ExponentialSchedule
 
 # we define goal action space as follows: for each goal what are the corresponding values for all cost. Then goes on
 #its like g1c1, g1c2, g1c3, g2c1, g2c2, g2c3
-def get_goal_cost(index, cost_dim, C, device):
+def get_goal_cost(index, cost_dim, C, device, upper_cost):
 
     goal_index = index//cost_dim
     cost_index = index%cost_dim
-    cost = C.get_cost_weight(cost_index)
+    cost = C.get_cost_weight(cost_index)*upper_cost
+    cost_weight = C.get_cost_weight(cost_index)
 
     goal = torch.LongTensor(np.array([goal_index])).unsqueeze(1).to(device)
     cost = torch.LongTensor(np.array([cost])).unsqueeze(1).to(device)
 
-    return goal, cost
+    return goal, cost, cost_weight
 
 
 class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
@@ -162,8 +163,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(150000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
@@ -336,6 +337,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         while self.num_episodes < self.args.num_episodes:
 
             upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
+            upper_cost_constraint[0] = self.args.d0
             lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
             current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
@@ -355,6 +357,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
             IR_t = []
             Goals_t = []
+            Cost_Lower_t = []
             CS_t = []
             T_t = []
             Cost_Alloc = []
@@ -381,13 +384,15 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
 
                 goal_cost = self.pi_meta(state=state)
-                goal, lower_cost_constraint = get_goal_cost(index=goal_cost[0], cost_dim=self.cost_dim, C=self.C,
-                                                            device=self.device)
+                goal, lower_cost_constraint, cost_weight = get_goal_cost(index=goal_cost[0], cost_dim=self.cost_dim, C=self.C,
+                                                            device=self.device, upper_cost=upper_cost_constraint.item())
                 goal_cost = torch.LongTensor(goal_cost).unsqueeze(1).to(self.device)
+                upper_cost_constraint = (1-cost_weight)*upper_cost_constraint
 
 
                 x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
                 Goals_t.append((x_g, y_g))
+                Cost_Lower_t.append((lower_cost_constraint, cost_weight, upper_cost_constraint))
 
 
                 q_values_upper = self.dqn_meta(state)
@@ -602,7 +607,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                         self.log_episode_stats(ep_reward=self.ep_reward, ep_constraint=self.ep_constraint)
 
                     if self.num_episodes % 500 == 0:
-                        log("Goal State: "  + " " + str(Goals_t) + " Current State: " + str(CS_t))
+                        log("Goal State: "  + " " + str(Goals_t) + " Current State: " + str(CS_t) + " Lower Cost: " + str(Cost_Lower_t))
                         log("No of Higher Eps: " +  str(len(Goals_t)) + " No of lower eps: " + str(T_t)  + " Cost Allocation(future, lower) " + str(Cost_Alloc))
 
                     #evaluation logging
@@ -667,6 +672,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         Goals = []
         CS = []
 
+        upper_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
+        upper_cost_constraint[0] = self.args.d0
         lower_cost_constraint = torch.zeros(self.args.num_envs).float().to(self.device)
         current_cost = torch.zeros(self.args.num_envs, 1).float().to(self.device)
 
@@ -676,9 +683,10 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
             # get the goal
             goal_cost = self.pi_meta(state=state, greedy_eval=True)
-            goal, lower_cost_constraint = get_goal_cost(index=goal_cost[0], cost_dim=self.cost_dim, C=self.C,
-                                                        device=self.device)
+            goal, lower_cost_constraint, cost_weight = get_goal_cost(index=goal_cost[0], cost_dim=self.cost_dim, C=self.C,
+                                                        device=self.device, upper_cost=upper_cost_constraint)
             goal_cost = torch.LongTensor(goal_cost).unsqueeze(1).to(self.device)
+            upper_cost_constraint = (1-cost_weight)*upper_cost_constraint
 
             x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
             Goals.append((x_g, y_g))
