@@ -44,3 +44,4 @@ C = w[1]*A
 
 print(B.backward())
 print(A, B, C)
+

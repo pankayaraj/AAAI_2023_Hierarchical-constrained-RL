@@ -40,6 +40,19 @@ class Goal_Space():
 
         self.action_shape = (len(goal_space), 1)
 
+    def find_shortest_goal_reward(self, current_state):
+        current_value = torch.argmax(current_state).item()
+        rewards = [-euclidian_distance(current_value, g, self.grid_size) for g in self.goal_space]
+
+        return max(rewards)
+
+    def validate_done(self, current_state):
+        current_value = torch.argmax(current_state).item()
+        if current_value in self.goal_space:
+            return True
+        else:
+            return False
+
     def intrisic_reward(self, current_state, goal_state):
         if type(current_state) != torch.Tensor:
             current_state = torch.Tensor(current_state)

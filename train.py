@@ -18,6 +18,7 @@ from agents.ours.hrl_safe_lower_with_manual_constraint import HRL_Discrete_Safe_
 from agents.ours.hrl_safe_with_global_costraints import HRL_Discrete_Safe_Global_Constraint
 from agents.ours.hrl_safe_with_global_constraints_dual import HRL_Discrete_Safe_Global_Constraint_Dual
 from agents.ours.hrl_safe_with_cost_allocation import HRL_Discrete_Safe_Lower_Cost_Alloc
+from agents.ours.hrl_sarsa_cost_allocation_only import HRL_Discrete_Safe_Lower_Cost_Allocation_Only
 
 """
 # A2C based agents
@@ -125,6 +126,8 @@ elif args.agent == "safe-dual-global-hrl-sarsa":
     agent = HRL_Discrete_Safe_Global_Constraint_Dual(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "safe-cost-alloc-lower-hrl-sarsa":
     agent = HRL_Discrete_Safe_Lower_Cost_Alloc(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+elif args.agent == "safe-cost-alloc-lower-only-hrl-sarsa":
+    agent = HRL_Discrete_Safe_Lower_Cost_Allocation_Only(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
