@@ -149,7 +149,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         #self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
         #self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
-        self.eps_u_decay = LinearSchedule(500000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -210,7 +210,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 #print("action_random")
         return action
 
-    def safe_deterministic_pi_lower(self, state, goal, goal_discrete, current_cost=0.0, greedy_eval=False):
+    def safe_deterministic_pi_lower(self, state, initial_state, goal, goal_discrete, current_cost=0.0, greedy_eval=False):
         """
         take the action based on the current policy
         d_low: cost allocated for the current low level episode
@@ -230,8 +230,11 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 cost_q_val = self.cost_lower_model(state_goal)
                 cost_r_val = self.review_lower_model(state_goal)
 
-                cost_q_val_upper = self.cost_upper_model(state).gather(0, goal_discrete[0])
-                cost_r_val_upper = self.review_upper_model(state)
+                #cost_q_val_upper = self.cost_upper_model(state).gather(0, goal_discrete[0])
+                #cost_r_val_upper = self.review_upper_model(state)
+
+                cost_q_val_upper = self.cost_upper_model(initial_state).gather(0, goal_discrete[0])
+                cost_r_val_upper = self.review_upper_model(initial_state)
 
 
                 quantity_1 = cost_q_val_upper + cost_r_val_upper
@@ -403,6 +406,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 #prev_states_u = []
                 #initial_state_for_CA = state  # this is the state goal cost used for optmization of cost allocator
 
+                initial_state = state
                 while t_lower <= self.args.max_ep_len_l-1:
 
                     instrinc_rewards = []  # for low level n-step
@@ -417,7 +421,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
 
                     c_temp = 0
                     for n_l in range(self.args.traj_len_l):
-                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost)
+                        action = self.safe_deterministic_pi_lower(state=state, initial_state=initial_state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
@@ -492,7 +496,7 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                     next_state_goal = torch.cat((next_state, goal_hot_vec))
                     #next_state_goal_cost = torch.cat((torch.cat((next_state, goal_hot_vec)), lower_cost_constraint.detach()))
 
-                    next_action = self.safe_deterministic_pi_lower(state=next_state, goal=goal_hot_vec, goal_discrete=goal,  current_cost=current_cost)
+                    next_action = self.safe_deterministic_pi_lower(state=next_state, initial_state=initial_state, goal=goal_hot_vec, goal_discrete=goal,  current_cost=current_cost)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
 
                     #update Reward Q value function
@@ -691,9 +695,11 @@ class HRL_Discrete_Safe_Global_Constraint(object):
 
             t_lower = 0
             ir = 0
+
+            initial_state = state
             while t_lower <= self.args.max_ep_len_l-1:
 
-                action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost, greedy_eval=True)
+                action = self.safe_deterministic_pi_lower(state=state, initial_state=initial_state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost, greedy_eval=True)
                 # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                 # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 

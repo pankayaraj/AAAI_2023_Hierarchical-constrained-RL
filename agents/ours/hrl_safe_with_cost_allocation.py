@@ -53,6 +53,12 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         """
         init the agent here
         """
+
+
+        print(env.to_string(args.goal_space))
+
+        #self.adjcancy_matrix = [[] for _ in range(args.num_episodes)]
+
         self.exp_no = exp_no
         self.save_dir = save_dir
         args.num_envs = 1
@@ -120,7 +126,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "grid_key_2":
             self.dqn_meta = OneHotDQN(self.state_dim, self.cost_goal_dim).to(self.device)
             self.dqn_meta_target = OneHotDQN(self.state_dim, self.cost_goal_dim).to(self.device)
 
@@ -363,6 +369,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
             Cost_Alloc = []
 
             t_upper = 0
+
+
             while not done:
                 values_upper = []
                 rewards_upper = []
@@ -412,6 +420,12 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                 #prev_states_u = []
                 #initial_state_for_CA = state  # this is the state goal cost used for optmization of cost allocator
 
+                #tuple_adj = [None for ___ in range(5)]
+                #tuple_adj[0] = self.G.convert_hot_vec_to_value(state)
+                #tuple_adj[1] = self.G.convert_hot_vec_to_value(goal_hot_vec)
+                #tuple_adj[2] = lower_cost_constraint
+                lower_cost_sum = 0
+
                 while t_lower <= self.args.max_ep_len_l-1:
 
                     instrinc_rewards = []  # for low level n-step
@@ -454,6 +468,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                         self.ep_constraint += info[self.cost_indicator]
                         self.ep_reward += reward
 
+                        lower_cost_sum += info[self.cost_indicator]
+
 
 
                         state_goal = torch.cat((state, goal_hot_vec))
@@ -491,6 +507,16 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                             break
 
 
+                    #tuple_adj[4] = done_l
+                    #if done_l:
+                    #    if lower_cost_sum < lower_cost_constraint:
+                    #        tuple_adj[3] = True
+                    #    else:
+                    #        tuple_adj[3] = False
+                    #else:
+                    #    tuple_adj[3] = False
+
+                    #self.adjcancy_matrix[self.num_episodes].append(tuple_adj)
 
                     x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
 
@@ -613,6 +639,10 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                     #evaluation logging
                     if self.num_episodes % self.args.eval_every == 0:
                         self.save() #save models
+
+                        #save adjacacny matrix
+                        p = self.save_dir + "adj_" + self.exp_no
+                        #torch.save(self.adjcancy_matrix, p)
 
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
 

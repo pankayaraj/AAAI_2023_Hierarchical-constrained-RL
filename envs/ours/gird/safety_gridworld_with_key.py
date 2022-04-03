@@ -91,7 +91,8 @@ def generate_maze(size=27, obstacle_density=0.3, gauss_placement=False, rand_goa
     for i in range(0, mx):
         for j in range(0, my):
             # pass if start or goal state
-            if (i==start_x and j==start_y) or (i==goal_x and j==goal_y):
+            if (i==start_x and j==start_y) or (i==goal_x and j==goal_y) or (i == key_x and j == key_y): #last condition in this is new as of now u didn't run anything on it so check I guess
+            #if (i==start_x and j==start_y) or (i==goal_x and j==goal_y):
                 pass
 
             # with prob p place the pit

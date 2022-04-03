@@ -14,14 +14,15 @@ def get_args():
 
 
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_cost_alloc_lower_hrl_sarsa_key/")
-    parser.add_argument('--exp_no', type=str, default="4  ")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_global_hrl_sarsa_key/")
+    parser.add_argument('--exp_no', type=str, default="6")
     parser.add_argument("--goal_space", type=list, default=[212,  160, 163])  #this is for discrete goal setting in an HRL setup
     #[212, 86, 160, 163, 282, 135, 200]
-    parser.add_argument("--cost_space", type=list, default=[0, 1])  # this is for discrete cost space
+    #[212,  160, 163]
+    parser.add_argument("--cost_space", type=list, default=[0, 1,])  # this is for discrete cost space
     parser.add_argument("--cost_mapping", type=list, default=[ 0.3, 0.6,])  # this is for discrete cost space
     #[0.0, 0.3, 0.6, 0.9]  [0, 1, 2, 3]
-
+    #[0, 1] [ 0.3, 0.6,]
     #[212, 86, 160, 163, 282, 135, 200]
     parser.add_argument('--env-name', default='pg',
                         help="pg: point gather env\n"\
