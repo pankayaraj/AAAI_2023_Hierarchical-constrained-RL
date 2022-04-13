@@ -38,14 +38,14 @@ for i in range(no_experiments):
     #R_HRL_60.append(torch.load("results/grid/safe_lower_hrl_sarsa_key/c_20/r" + str(i + 1))[:l])
     #C_HRL_60.append(torch.load("results/grid/safe_lower_hrl_sarsa_key/c_20/c" + str(i + 1))[0:l])
 
-    #R_HRL_90.append(torch.load("results/grid/safe_lower_hrl_sarsa_key/c_30/r" + str(i + 1))[:l])
-    #C_HRL_90.append(torch.load("results/grid/safe_lower_hrl_sarsa_key/c_30/c" + str(i + 1))[0:l])
+    R_HRL_90.append(torch.load("results/grid/safe_cost_alloc_lower_hrl_sarsa_key/r" + str(i + 1))[:l])
+    C_HRL_90.append(torch.load("results/grid/safe_cost_alloc_lower_hrl_sarsa_key/c" + str(i + 1))[0:l])
 
     R_HRL_G_60.append(torch.load("results/grid/safe_global_hrl_sarsa_key/60_new/r" + str(i + 1))[:l])
     C_HRL_G_60.append(torch.load("results/grid/safe_global_hrl_sarsa_key/60_new/c" + str(i + 1))[0:l])
 
-    R_HRL_G_90.append(torch.load("results/grid/safe_global_hrl_sarsa_key/90_new/r" + str(i + 1))[:l])
-    C_HRL_G_90.append(torch.load("results/grid/safe_global_hrl_sarsa_key/90_new/c" + str(i + 1))[0:l])
+    R_HRL_G_90.append(torch.load("results/grid/safe_global_hrl_sarsa_key/r" + str(i + 1))[:l])
+    C_HRL_G_90.append(torch.load("results/grid/safe_global_hrl_sarsa_key/c" + str(i + 1))[0:l])
 
     #R_k.append(torch.load("results/grid/hrl_sarsa_key/r" + str(i + 1))[:l])
     #C_k.append(torch.load("results/grid/hrl_sarsa_key/c" + str(i + 1))[0:l])
@@ -63,8 +63,8 @@ C_avg_90 = []
 #R_avg_HRL_60 = []
 #C_avg_HRL_60 = []
 
-#R_avg_HRL_90 = []
-#C_avg_HRL_90 = []
+R_avg_HRL_90 = []
+C_avg_HRL_90 = []
 
 R_avg_HRL_G_60 = []
 C_avg_HRL_G_60 = []
@@ -87,8 +87,8 @@ for j in range(len(R_60)):
     #r_avg_HRL_60 = []
     #c_avg_HRL_60 = []
 
-    #r_avg_HRL_90 = []
-    #c_avg_HRL_90 = []
+    r_avg_HRL_90 = []
+    c_avg_HRL_90 = []
 
     r_avg_HRL_G_60 = []
     c_avg_HRL_G_60 = []
@@ -109,8 +109,8 @@ for j in range(len(R_60)):
         #r_avg_HRL_60.append(np.mean(R_HRL_60[j][i - 10:i]))
         #c_avg_HRL_60.append(np.mean(C_HRL_60[j][i - 10:i]))
 
-        #r_avg_HRL_90.append(np.mean(R_HRL_90[j][i - 10:i]))
-        #c_avg_HRL_90.append(np.mean(C_HRL_90[j][i - 10:i]))
+        r_avg_HRL_90.append(np.mean(R_HRL_90[j][i - 10:i]))
+        c_avg_HRL_90.append(np.mean(C_HRL_90[j][i - 10:i]))
 
         r_avg_HRL_G_60.append(np.mean(R_HRL_G_60[j][i - 10:i]))
         c_avg_HRL_G_60.append(np.mean(C_HRL_G_60[j][i - 10:i]))
@@ -131,8 +131,8 @@ for j in range(len(R_60)):
     #R_avg_HRL_60.append(r_avg_HRL_60)
     #C_avg_HRL_60.append(c_avg_HRL_60)
 
-    #R_avg_HRL_90.append(r_avg_HRL_90)
-    #C_avg_HRL_90.append(c_avg_HRL_90)
+    R_avg_HRL_90.append(r_avg_HRL_90)
+    C_avg_HRL_90.append(c_avg_HRL_90)
 
     R_avg_HRL_G_60.append(r_avg_HRL_G_60)
     C_avg_HRL_G_60.append(c_avg_HRL_G_60)
@@ -149,8 +149,8 @@ R_avg_90 = np.array(R_avg_90)
 C_avg_90 = np.array(C_avg_90)
 #R_avg_HRL_60 = np.array(R_avg_HRL_60)
 #C_avg_HRL_60 = np.array(C_avg_HRL_60)
-#R_avg_HRL_90 = np.array(R_avg_HRL_90)
-#C_avg_HRL_90 = np.array(C_avg_HRL_90)
+R_avg_HRL_90 = np.array(R_avg_HRL_90)
+C_avg_HRL_90 = np.array(C_avg_HRL_90)
 R_avg_HRL_G_60 = np.array(R_avg_HRL_G_60)
 C_avg_HRL_G_60 = np.array(C_avg_HRL_G_60)
 R_avg_HRL_G_90 = np.array(R_avg_HRL_G_90)
@@ -164,8 +164,8 @@ R_mean_90 = np.mean(R_avg_90, axis=0)
 C_mean_90 = np.mean(C_avg_90, axis=0)
 #R_mean_HRL_60 = np.mean(R_avg_HRL_60, axis=0)
 #C_mean_HRL_60 = np.mean(C_avg_HRL_60, axis=0)
-#R_mean_HRL_90 = np.mean(R_avg_HRL_90, axis=0)
-#C_mean_HRL_90 = np.mean(C_avg_HRL_90, axis=0)
+R_mean_HRL_90 = np.mean(R_avg_HRL_90, axis=0)
+C_mean_HRL_90 = np.mean(C_avg_HRL_90, axis=0)
 R_mean_HRL_G_60 = np.mean(R_avg_HRL_G_60, axis=0)
 C_mean_HRL_G_60 = np.mean(C_avg_HRL_G_60, axis=0)
 R_mean_HRL_G_90 = np.mean(R_avg_HRL_G_90, axis=0)
@@ -180,8 +180,8 @@ R_std_90 = np.std(R_avg_90, axis=0)
 C_std_90 = np.std(C_avg_90, axis=0)
 #R_std_HRL_60 = np.std(R_avg_HRL_60, axis=0)
 #C_std_HRL_60 = np.std(C_avg_HRL_60, axis=0)
-#R_std_HRL_90 = np.std(R_avg_HRL_90, axis=0)
-#C_std_HRL_90 = np.std(C_avg_HRL_90, axis=0)
+R_std_HRL_90 = np.std(R_avg_HRL_90, axis=0)
+C_std_HRL_90 = np.std(C_avg_HRL_90, axis=0)
 R_std_HRL_G_60 = np.std(R_avg_HRL_G_60, axis=0)
 C_std_HRL_G_60 = np.std(C_avg_HRL_G_60, axis=0)
 R_std_HRL_G_90 = np.std(R_avg_HRL_G_90, axis=0)
@@ -190,7 +190,8 @@ C_std_HRL_G_90 = np.std(C_avg_HRL_G_90, axis=0)
 #C_k_std = np.std(C_k_avg, axis=0)
 
 x = [i for i in range(len(R_mean_60))]
-legend = ["bvf-safe-sarsa", "hrl-safe-l-c-alloc", "hrl-safe-global-bvf", "unsafe_hrl"]
+#legend = ["bvf-safe-sarsa", "hrl-safe-l-c-alloc", "hrl-safe-global-bvf", "unsafe_hrl"]
+legend = ["bvf-without_hrl", "global-bvf-with-hrl", "hrl-with-cost-allocation"]
 print(len(R_mean_60), len(R_mean_HRL_G_60))
 
 
@@ -228,10 +229,10 @@ plt.tick_params(axis='both', which='major', labelsize=30)
 plt.plot(x, R_mean_90, label=legend[0], linewidth=5)
 plt.fill_between(x, R_mean_90 + R_std_90, R_mean_90 - R_std_90, alpha = 0.1)
 
-#plt.plot(x, R_mean_HRL_90, label=legend[1], linewidth=5)
-#plt.fill_between(x, R_mean_HRL_90 + R_std_HRL_90, R_mean_HRL_90 - R_std_HRL_90, alpha = 0.1)
+plt.plot(x, R_mean_HRL_90, label=legend[2], linewidth=5)
+plt.fill_between(x, R_mean_HRL_90 + R_std_HRL_90, R_mean_HRL_90 - R_std_HRL_90, alpha = 0.1)
 
-plt.plot(x, R_mean_HRL_G_90, label=legend[2], linewidth=5)
+plt.plot(x, R_mean_HRL_G_90, label=legend[1], linewidth=5)
 plt.fill_between(x, R_mean_HRL_G_90 + R_std_HRL_G_90, R_mean_HRL_G_90 - R_std_HRL_G_90, alpha = 0.1)
 
 plt.legend( prop={'size':40}, loc='upper left')
@@ -278,10 +279,10 @@ plt.tick_params(axis='both', which='major', labelsize=30)
 plt.plot(C_mean_90, label=legend[0], linewidth=3)
 plt.fill_between(x, C_mean_90 + C_std_90, C_mean_90 - C_std_90, alpha = 0.3)
 
-#plt.plot(C_mean_HRL_90, label=legend[1], linewidth=3)
-#plt.fill_between(x, C_mean_HRL_90 + C_std_HRL_90, C_mean_HRL_90 - C_std_HRL_90, alpha = 0.3)
+plt.plot(C_mean_HRL_90, label=legend[2], linewidth=3)
+plt.fill_between(x, C_mean_HRL_90 + C_std_HRL_90, C_mean_HRL_90 - C_std_HRL_90, alpha = 0.3)
 
-plt.plot(C_mean_HRL_G_90, label=legend[2], linewidth=3)
+plt.plot(C_mean_HRL_G_90, label=legend[1], linewidth=3)
 plt.fill_between(x, C_mean_HRL_G_90 + C_std_HRL_G_90, C_mean_HRL_G_90 - C_std_HRL_G_90, alpha = 0.3)
 
 

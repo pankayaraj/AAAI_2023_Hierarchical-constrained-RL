@@ -54,10 +54,21 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         init the agent here
         """
 
+        """
+        Changes: Commented out the saving in array part
+                 Commented out the saving arrys via torch.save part 
+                 Removed that manual restriction on cost minimization
+                 Changes the environment to give -1 per step penalty 
+        """
 
+
+        self.eval_reward_boolean = False
         print(env.to_string(args.goal_space))
 
         #self.adjcancy_matrix = [[] for _ in range(args.num_episodes)]
+        self.cost_estimate_L = []
+        self.action_mask_L = []
+        self.cost_L = []
 
         self.exp_no = exp_no
         self.save_dir = save_dir
@@ -169,7 +180,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(200000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -250,6 +261,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
                 # find the action set
                 # create the filtered mask here
+
+
                 constraint_mask = torch.le(cost_q_val + cost_r_val, d_low + current_cost).float().squeeze(0)
 
                 filtered_Q = (q_value + 1000.0) * (constraint_mask)
@@ -263,14 +276,24 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                 action_mask = ( c_sum == torch.zeros_like(c_sum)).cpu().numpy()
 
                 action = (1 - action_mask) * filtered_action + action_mask * alt_action
+                '''
+                if self.eval_reward_boolean == False:
+                    action = (1 - action_mask) * filtered_action + action_mask * alt_action
+                else:
+                    action = (1 - action_mask) * filtered_action + action_mask * np.array([q_value.max(0)[1].cpu().numpy()])
+                    action_mask = np.array([False])
+                '''
 
-                return action
+                cost_estimate = cost_q_val + cost_r_val - current_cost
+
+
+                return action, cost_estimate, action_mask
 
             else:
                 # create an array of random indices, for all the environments
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
 
-        return action
+                return action, None, None
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """
@@ -353,6 +376,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
             next_state = None
             done = None
 
+
+
             states_u      = []
             actions_u     = []
 
@@ -376,7 +401,9 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                 rewards_upper = []
                 done_masks = []
 
-
+                eps_cost_estimate = []
+                eps_action_mask = []
+                eps_cost = []
 
                 t_upper += 1
 
@@ -426,6 +453,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                 #tuple_adj[2] = lower_cost_constraint
                 lower_cost_sum = 0
 
+
+
                 while t_lower <= self.args.max_ep_len_l-1:
 
                     instrinc_rewards = []  # for low level n-step
@@ -437,10 +466,14 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                     cost_r_lower = []
                     prev_states_l = []
 
+                    eps_cost_estimate_l = []
+                    eps_action_mask_l = []
+                    esp_cost_l = []
+
 
 
                     for n_l in range(self.args.traj_len_l):
-                        action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
+                        action, cost_estimate, action_mask = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
                         instrinc_reward = self.G.intrisic_reward(current_state=next_state,
@@ -490,6 +523,10 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                         cost_q_lower.append(Cost_value)
                         cost_r_lower.append(Review_value_lower)
 
+                        esp_cost_l.append(lower_cost_sum)
+                        eps_cost_estimate_l.append(cost_estimate)
+                        eps_action_mask_l.append(action_mask)
+
                         t_lower += 1
                         self.total_steps += 1
                         self.total_lower_time_steps += 1
@@ -505,6 +542,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
 
                         if t_lower > self.args.max_ep_len_l-1:
                             break
+
 
 
                     #tuple_adj[4] = done_l
@@ -524,7 +562,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                     next_state_goal = torch.cat((next_state, goal_hot_vec))
                     #next_state_goal_cost = torch.cat((torch.cat((next_state, goal_hot_vec)), lower_cost_constraint.detach()))
 
-                    next_action = self.safe_deterministic_pi_lower(state=next_state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
+                    next_action, cost_estimate, action_mask = self.safe_deterministic_pi_lower(state=next_state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost)
                     next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
 
                     #update Reward Q value function
@@ -569,7 +607,9 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                     cost_review_loss.backward()
                     self.review_lower_optimizer.step()
 
-
+                    eps_cost_estimate.append(eps_cost_estimate_l)
+                    eps_cost.append(esp_cost_l)
+                    eps_action_mask.append(eps_action_mask_l)
 
                     if done:
                         break
@@ -582,6 +622,8 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
                 done_masks.append((1 - done))
+
+
 
                 CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
@@ -641,12 +683,25 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                         self.save() #save models
 
                         #save adjacacny matrix
+                        p1 = self.save_dir + "cost_estimate_" + self.exp_no
+                        p2 = self.save_dir + "cost_" + self.exp_no
+                        p3 = self.save_dir + "action_mask" + self.exp_no
+
+                        #torch.save(self.cost_estimate_L, p1)
+                        #torch.save(self.cost_L, p2)
+                        #torch.save(self.action_mask_L, p3)
+
                         p = self.save_dir + "adj_" + self.exp_no
                         #torch.save(self.adjcancy_matrix, p)
 
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
 
                         print("Epsilon Upper and Lower:" + str(self.eps_u) +", " + str(self.eps_l))
+
+                        #print(eval_reward.item())
+                        if eval_reward.item() > 3000.0:
+                            self.eval_reward_boolean = True
+
 
                         self.EVAL_REWARDS.append(eval_reward)
                         self.EVAL_CONSTRAINTS.append(eval_constraint)
@@ -678,6 +733,9 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
                     state = torch.FloatTensor(state).to(device=self.device)
                     break #this break is to terminate the higher tier episode as the episode is now over
 
+            #self.cost_estimate_L.append(eps_cost_estimate)
+            #self.cost_L.append(eps_cost)
+            #self.action_mask_L.append(eps_action_mask)
 
 
 
@@ -730,7 +788,7 @@ class HRL_Discrete_Safe_Lower_Cost_Alloc(object):
             ir = 0
             while t_lower <= self.args.max_ep_len_l-1:
 
-                action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost, greedy_eval=True)
+                action, cost_estimate, action_mask = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, d_low=lower_cost_constraint.detach(), current_cost=current_cost, greedy_eval=True)
                 # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                 # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 

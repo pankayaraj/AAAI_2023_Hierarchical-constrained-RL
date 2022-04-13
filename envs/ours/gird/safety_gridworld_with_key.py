@@ -115,6 +115,7 @@ class PitWorld_Key(gym.Env):
                  size = 27,
                  max_step = 200,
                  per_step_penalty = -1.0,
+                 #per_step_penalty=0.0,
                  goal_reward = 1000.0,
                  obstace_density = 0.3,
                  constraint_cost = 1.0,

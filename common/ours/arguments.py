@@ -14,8 +14,8 @@ def get_args():
 
 
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_global_hrl_sarsa_key/")
-    parser.add_argument('--exp_no', type=str, default="6")
+    parser.add_argument('--save_dir', type=str, default="results/grid/safe_upper_bvf_lower_lagrangian/l_0_0_5/")
+    parser.add_argument('--exp_no', type=str, default="3  ")
     parser.add_argument("--goal_space", type=list, default=[212,  160, 163])  #this is for discrete goal setting in an HRL setup
     #[212, 86, 160, 163, 282, 135, 200]
     #[212,  160, 163]
@@ -95,7 +95,7 @@ def get_args():
     # Training arguments
     parser.add_argument('--num-steps', type=int, default=int(1e4),
                         help="number of steps to train the agent")
-    parser.add_argument('--num-episodes', type=int, default=int(3e5),
+    parser.add_argument('--num-episodes', type=int, default=int(5e5),
                         help="number of episodes to train the agetn")
 
     parser.add_argument('--max_ep_len_u', type=int, default=int(5),

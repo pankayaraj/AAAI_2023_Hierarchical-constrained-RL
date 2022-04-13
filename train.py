@@ -19,6 +19,7 @@ from agents.ours.hrl_safe_with_global_costraints import HRL_Discrete_Safe_Global
 from agents.ours.hrl_safe_with_global_constraints_dual import HRL_Discrete_Safe_Global_Constraint_Dual
 from agents.ours.hrl_safe_with_cost_allocation import HRL_Discrete_Safe_Lower_Cost_Alloc
 from agents.ours.hrl_sarsa_cost_allocation_only import HRL_Discrete_Safe_Lower_Cost_Allocation_Only
+from agents.ours.hrl_safe_upper_bvf_only_lower_lagarangian import HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian
 
 """
 # A2C based agents
@@ -128,6 +129,8 @@ elif args.agent == "safe-cost-alloc-lower-hrl-sarsa":
     agent = HRL_Discrete_Safe_Lower_Cost_Alloc(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "safe-cost-alloc-lower-only-hrl-sarsa":
     agent = HRL_Discrete_Safe_Lower_Cost_Allocation_Only(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
+elif args.agent == "safe-upper_bvf_lower_lagrangian":
+    agent = HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 else:
     raise Exception("Not implemented yet")
 
