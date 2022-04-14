@@ -15,7 +15,7 @@ def get_args():
 
 
     parser.add_argument('--save_dir', type=str, default="results/grid/safe_upper_bvf_lower_lagrangian/l_0_0_5/")
-    parser.add_argument('--exp_no', type=str, default="3  ")
+    parser.add_argument('--exp_no', type=str, default="6")
     parser.add_argument("--goal_space", type=list, default=[212,  160, 163])  #this is for discrete goal setting in an HRL setup
     #[212, 86, 160, 163, 282, 135, 200]
     #[212,  160, 163]
