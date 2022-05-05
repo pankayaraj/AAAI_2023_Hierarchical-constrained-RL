@@ -32,11 +32,33 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                  writer = None,
                  save_dir=None,
                  exp_no=None,
-                 lam= 0.05,
+                 #lam= 0.05,
+                 lam=1,
                  ):
         """
         init the agent here
         """
+
+        self.cost_estimate_L = []
+        self.action_mask_L = []
+        self.cost_L = []
+        self.cost_U = []
+
+        self.f_value_l = []
+        self.f_q_value_l = []
+
+        self.r_value_u = []
+        self.f_q_value_u = []
+
+        self.value_G1 = []
+        self.value_G2 = []
+        self.value_G3 = []
+
+        self.adj_key1 = []
+        self.adj_key2 = []
+        self.adj_key3 = []
+
+
         self.lam = lam
         self.exp_no = exp_no
         self.save_dir = save_dir
@@ -141,8 +163,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         #for upper cost value function
         self.review_upper_optimizer = optim.Adam(self.review_upper_model.parameters(), lr=self.args.cost_reverse_lr)
         # for upper cost q function
-        self.critic_upper_optimizer = optim.Adam(self.cost_upper_model.parameters(),lr=self.args.cost_q_lr)
-
+        #self.critic_upper_optimizer = optim.Adam(self.cost_upper_model.parameters(),lr=self.args.cost_q_lr)
+        self.critic_upper_optimizer = optim.Adam(self.cost_upper_model.parameters(), lr=self.args.lr)
 
         self.total_steps = 0
         self.total_lower_time_steps = 0
@@ -150,7 +172,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
+        self.eps_u_decay = LinearSchedule(300000 * 200, 0.01, 1.0)
         self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
@@ -214,11 +236,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
     def safe_deterministic_pi_lower(self, state, goal, goal_discrete, current_cost=None, greedy_eval=False):
         """
         Things to figure out:
-
         Now the lower level cost estimate depends on both the state and goal( which is not decided until we select one
         """
-
-
 
 
         state_goal = torch.cat((state, goal))
@@ -270,9 +289,23 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 quantity_1 = cost_q_val_upper + cost_r_val_upper
                 quantity_2 = self.args.d0 + (cost_v_val)
 
+                """
+                print(cost_v_val, "a")
+                print(cost_q_val_upper)
+                print(cost_r_val_upper)
+                print(quantity_1, quantity_2)
+                """
+
+
+                #quantity_2 = self.args.d0 + (current_cost)
                 # find the action set that satisfies the constraints
                 # create the filtered mask here
                 constraint_mask = torch.le(quantity_1, quantity_2).float().squeeze(0)
+
+                #print(q_value)
+                #print(constraint_mask)
+                #print(cost_v_val)
+                #print(cost_q_val_upper + cost_r_val_upper)
 
                 filtered_Q = (q_value + 1000.0) * (constraint_mask)
 
@@ -293,6 +326,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 goal = np.random.randint(0, high=self.goal_dim, size=(self.args.num_envs,))
 
         return goal
+
 
     def compute_n_step_returns(self, next_value, rewards, masks):
         """
@@ -317,8 +351,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         returns = []
         for step in range(len(costs)):
             R = costs[step] + self.args.gamma * R * begin_masks[step]
-            returns.append(R)
 
+            returns.append(R)
         return returns
 
     def log_episode_stats(self, ep_reward, ep_constraint, F, C_l):
@@ -362,6 +396,10 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         start_time = time.time()
 
 
+        self.global_intrinsic_reward = 100
+        self.per_step_penalty = -1
+
+
         while self.num_episodes < self.args.num_episodes:
 
 
@@ -383,19 +421,41 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
 
 
+            eps_r_value_U = []
+            eps_f_q_value_U = []
+
+            eps_cost_L = []
+            eps_cost_U = []
+
+            eps_f_value_L = []
+            eps_f_q_value_L = []
+
+            eps_value_g1 = []
+            eps_value_g2 = []
+            eps_value_g3 = []
+
             t_upper = 0
+
+             # this is so that we can compute n-step return. But in the current case n is 1 for upper so list will only have one value
+            #prev_states_u.append(state)
+
+            e_l = 0
+
+            d_m = []
+
+            values_upper = []
+            rewards_upper = []
+            constraints_upper = []
+            done_masks = []
+            begin_mask_upper = []
+            prev_states_u = []
+
+            cost_q_upper = []
+            cost_r_upper = []
+
             while not done:
-                values_upper = []
-                rewards_upper = []
-                done_masks = []
-                constraints_upper = []
-                begin_mask_upper = []
-                cost_q_upper = []
-                cost_r_upper = []
+                e_l += 1
 
-                prev_states_u = [] #this is so that we can compute n-step return. But in the current case n is 1 for upper so list will only have one value
-
-                prev_states_u.append(state)
 
                 if t_upper == 0:
                     begin_mask_u = True
@@ -420,11 +480,14 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 Cost_value_Upper = cost_values_upper.gather(0, goal[0])
                 Review_value_Upper = self.review_upper_model(state)
 
+
                 #an indicator that is used to terminate the lower level episode
                 t_lower = 0
 
                 R = 0
                 C = 0
+
+                upper_cost_sum = 0
 
                 F_l = []
                 C_l = []
@@ -432,10 +495,19 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
                 goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-                #L = None
-                #this will terminate of the current lower level episoded went beyond limit
-                #prev_states_u = []
-                #initial_state_for_CA = state  # this is the state goal cost used for optmization of cost allocator
+                # debug parameters
+                eps_f_q_value_U.append(Cost_value_Upper.item())
+                eps_r_value_U.append(Review_value_Upper.item())
+
+                goal1 = torch.LongTensor([0])  # random
+                goal2 = torch.LongTensor([1])  # key
+                goal3 = torch.LongTensor([2])  # goal
+
+                eps_value_g1.append(q_values_upper.gather(0, goal1).item())
+                eps_value_g2.append(q_values_upper.gather(0, goal2).item())
+                eps_value_g3.append(q_values_upper.gather(0, goal3).item())
+
+
 
                 while t_lower <= self.args.max_ep_len_l-1:
 
@@ -449,8 +521,18 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                     cost_v_lower = []
                     prev_states_l = []
 
+                    eps_cost_estimate_l = []
+                    eps_action_mask_l = []
+                    esp_cost_l = []
+
+                    eps_r_value_l = []
+                    eps_f_q_value_l = []
+                    eps_f_value_l = []
+
+
                     C_lower = 0
                     F_lower = 0
+                    lower_cost_sum = 0
 
                     c_temp = 0
                     for n_l in range(self.args.traj_len_l):
@@ -458,8 +540,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=None)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                        #instrinc_reward = self.G.intrisic_reward(current_state=next_state,
+                        #                                         goal_state=goal_hot_vec)
 
                         if t_lower == 0:
                             begin_mask_l = True
@@ -470,9 +552,12 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         next_state = torch.FloatTensor(next_state).to(self.device)
                         done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
-                        #print(action)
+                        if done_l:
+                            instrinc_reward =self.global_intrinsic_reward
+                        else:
+                            instrinc_reward = self.per_step_penalty
+
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
-                        #print(action, torch.LongTensor(action))
                         current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
 
                         #these are the values used to train the lower level
@@ -483,6 +568,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
                         C_lower = torch.FloatTensor([C_lower]).unsqueeze(1).to(self.device)
                         F_lower += instrinc_reward
+                        lower_cost_sum += info[self.cost_indicator]
+                        upper_cost_sum += info[self.cost_indicator]
 
                         #for training logging purposes
                         self.ep_len += 1
@@ -494,13 +581,15 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         q_values_lower = self.dqn_lower(state=state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
 
-                        if t_lower == 0:
-                            constraints_upper.append(Q_value_lower)
+
 
                         cost_values_lower = self.cost_lower_model(state=state_goal)
                         Cost_value = cost_values_lower.gather(0, action[0])
                         Review_value_lower = self.review_lower_model(state=state_goal)
                         Value_lower = self.cost_lower_value_model(state=state).gather(0, goal[0])
+
+                        #if t_lower == 0:
+                        #    constraints_upper.append(Value_lower)
 
                         values_lower.append(Q_value_lower)
                         instrinc_rewards.append(instrinc_reward)
@@ -510,6 +599,12 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         cost_q_lower.append(Cost_value)
                         cost_r_lower.append(Review_value_lower)
                         cost_v_lower.append(Value_lower)
+
+                        #DEBUG STUFF
+                        esp_cost_l.append(lower_cost_sum)
+                        eps_f_q_value_l.append(Cost_value.item())
+                        eps_f_value_l.append(Value_lower.item())
+                        eps_r_value_l.append(Review_value_lower.item())
 
                         t_lower += 1
                         self.total_steps += 1
@@ -578,6 +673,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                     C_r_targets = torch.cat(c_r_targets).detach()
                     C_r_vals = torch.cat(cost_r_lower)
 
+
+
                     cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
                     self.review_lower_optimizer.zero_grad()
                     cost_review_loss.backward()
@@ -597,84 +694,75 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         break
 
 
+                    #if goal.item() == 1:
+                    #    print(lower_cost_sum, C, t_lower)
+                eps_cost_U.append(upper_cost_sum)
+                eps_f_q_value_L.append(eps_f_q_value_l)
+                eps_f_value_L.append(eps_f_value_l)
 
-
-                #prev_states_u.append(previous_state)
+                prev_states_u.append(previous_state)
 
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
-                #constraints_upper.append(C)
+                constraints_upper.append(C)
                 cost_q_upper.append(Cost_value_Upper)
                 cost_r_upper.append(Review_value_Upper)
                 done_masks.append((1 - done))
                 begin_mask_upper.append((1 - begin_mask_u))
 
+                d_m.append(done)
 
                 CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
 
-                #next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
-
-                next_goal = self.pi_meta(next_state)
-                next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-                next_values = self.dqn_meta(next_state)
-                Next_Value = next_values.gather(0, next_goal[0])
-
-                target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
-                Q_targets_upper = torch.cat(target_Q_values_upper).detach()
-                Q_values_upper = torch.cat(values_upper)
-
-                loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
-                self.optimizer_meta.zero_grad()
-                loss_upper.backward()
-                self.optimizer_meta.step()
-
-                # update cost Q value function upper
-                next_c_value = self.cost_upper_model(next_state)
-                Next_c_value = next_c_value.gather(0, next_goal[0])
-
-                cq_targets = self.compute_n_step_returns(Next_c_value, constraints_upper, done_masks)
-                C_q_targets = torch.cat(cq_targets).detach()
-                C_q_vals = torch.cat(cost_q_upper)
-
-                cost_critic_loss_upper = F.mse_loss(C_q_vals, C_q_targets)
-                self.critic_upper_optimizer.zero_grad()
-                cost_critic_loss_upper.backward()
-                self.critic_upper_optimizer.step()
-
-                # For the constraints (reverse) upper
-                previous_state = prev_states_u[0]
-                prev_value = self.review_upper_model(previous_state)
-
-                c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints_upper, begin_mask_upper)
-                C_r_targets = torch.cat(c_r_targets).detach()
-                C_r_vals = torch.cat(cost_r_upper)
-
-                cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
-                self.review_upper_optimizer.zero_grad()
-                cost_review_loss.backward()
-                self.review_upper_optimizer.step()
-
+                #if self.num_episodes%100 == 0:
+                #    print(constraints_upper, len(prev_states_u))
 
                 if done:
 
-
-
-                    #training logging
+                    # training logging
                     if self.num_episodes % 100 == 0:
-                        self.log_episode_stats(ep_reward=self.ep_reward, ep_constraint=self.ep_constraint, F=F_l, C_l=C_l)
+                        self.log_episode_stats(ep_reward=self.ep_reward, ep_constraint=self.ep_constraint, F=F_l,
+                                               C_l=C_l)
 
                     if self.num_episodes % 500 == 0:
-                        log("Goal State: "  + " " + str(Goals_t) + " Current State: " + str(CS_t))
-                        #log("No of Higher Eps: " +  str(len(Goals_t)) + " No of lower eps: " + str(T_t)  + " Cost Allocation(future, lower) " + str(Cost_Alloc))
+                        log("Goal State: " + " " + str(Goals_t) + " Current State: " + str(CS_t))
+                        # log("No of Higher Eps: " +  str(len(Goals_t)) + " No of lower eps: " + str(T_t)  + " Cost Allocation(future, lower) " + str(Cost_Alloc))
 
-                    #evaluation logging
-                    if self.num_episodes % self.args.eval_every == 0 :
-                        self.save() #save models
+                    # evaluation logging
+                    if self.num_episodes % self.args.eval_every == 0:
+                        # self.save() #save models
+
+                        path = self.save_dir + "policy_" + self.exp_no + "/" + "z_" + str(self.num_episodes // 1000)
+                        self.save(path=path)
+
+                        p1 = self.save_dir + "cost_U_" + self.exp_no
+                        p2 = self.save_dir + "cost_L_" + self.exp_no
+                        p3 = self.save_dir + "f_value_l" + self.exp_no
+                        p4 = self.save_dir + "f_q_value_l" + self.exp_no
+                        p5 = self.save_dir + "r_value_u" + self.exp_no
+                        p6 = self.save_dir + "f_q_value_u" + self.exp_no
+
+                        p7 = self.save_dir + "value_g1_" + self.exp_no
+                        p8 = self.save_dir + "value_g2_" + self.exp_no
+                        p9 = self.save_dir + "value_g3_" + self.exp_no
+
+                        torch.save(self.cost_U, p1)
+                        torch.save(self.cost_L, p2)
+
+                        torch.save(self.f_value_l, p3)
+                        torch.save(self.f_q_value_l, p4)
+
+                        torch.save(self.r_value_u, p5)
+                        torch.save(self.f_q_value_u, p6)
+
+                        torch.save(self.value_G1, p7)
+                        torch.save(self.value_G2, p8)
+                        torch.save(self.value_G3, p9)
 
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
 
-                        print("Epsilon Upper and Lower:" + str(self.eps_u) +", " + str(self.eps_l))
+                        print("Epsilon Upper and Lower:" + str(self.eps_u) + ", " + str(self.eps_l))
 
                         self.EVAL_REWARDS.append(eval_reward)
                         self.EVAL_CONSTRAINTS.append(eval_constraint)
@@ -688,7 +776,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                             'Episode: {}\t'.format(self.num_episodes) + \
                             'avg_eval_reward: {:.2f}\t'.format(np.mean(self.EVAL_REWARDS[-10:])) + \
                             'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.EVAL_CONSTRAINTS[-10:]))
-                            )
+                        )
                         log('--------------------------------------------------------------------------------------------------------')
 
                     self.num_episodes += 1
@@ -697,10 +785,90 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                     self.ep_len = 0
                     self.ep_constraint = 0
 
-                    state = self.env.reset() #reset
+                    state = self.env.reset()  # reset
                     state = torch.FloatTensor(state).to(device=self.device)
-                    break #this break is to terminate the higher tier episode as the episode is now over
+                    break  # this break is to terminate the higher tier episode as the episode is now over
 
+            next_goal = self.pi_meta(next_state)
+            next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
+
+            next_values = self.dqn_meta(next_state)
+            Next_Value = next_values.gather(0, next_goal[0])
+
+
+
+            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
+            Q_targets_upper = torch.cat(target_Q_values_upper).detach()
+            Q_values_upper = torch.cat(values_upper)
+
+            loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
+            self.optimizer_meta.zero_grad()
+            loss_upper.backward()
+            self.optimizer_meta.step()
+
+            # update cost Q value function upper
+            next_c_value = self.cost_upper_model(next_state)
+            Next_c_value = next_c_value.gather(0, next_goal[0])
+
+
+
+
+            cq_targets = self.compute_n_step_returns(Next_c_value, constraints_upper, done_masks)
+            C_q_targets = torch.cat(cq_targets).detach()
+            C_q_vals = torch.cat(cost_q_upper)
+
+            #print(Next_c_value.item(), constraints_upper[0], C_q_vals.item() )
+
+            cost_critic_loss_upper = F.mse_loss(C_q_vals, C_q_targets)
+            self.critic_upper_optimizer.zero_grad()
+            cost_critic_loss_upper.backward()
+            self.critic_upper_optimizer.step()
+
+            # For the constraints (reverse) upper
+            previous_state = prev_states_u[0]
+            prev_value = self.review_upper_model(previous_state)
+
+            c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints_upper, begin_mask_upper)
+            C_r_targets = torch.cat(c_r_targets).detach()
+            C_r_vals = torch.cat(cost_r_upper)
+
+            """
+            if self.num_episodes%200 == 0:
+                print(e_l)
+                print(d_m, goal.item())
+                print("------------------------------------------")
+                print("Forward")
+                print(constraints_upper, Next_c_value)
+                print(C_q_targets, C_q_vals)
+                print("Backward")
+                print(constraints_upper, prev_value)
+                print(C_r_targets, C_r_vals)
+            #print(prev_value.item(), constraints_upper[0], C_r_vals.item())
+            """
+
+            cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
+            self.review_upper_optimizer.zero_grad()
+            cost_review_loss.backward()
+            self.review_upper_optimizer.step()
+
+
+
+
+
+
+            self.cost_L.append(eps_cost_L)
+            self.cost_U.append(eps_cost_U)
+
+
+
+            self.f_value_l.append(eps_f_value_L)
+            self.f_q_value_l.append(eps_f_q_value_L)
+
+            self.r_value_u.append(eps_r_value_U)
+            self.f_q_value_u.append(eps_f_q_value_U)
+            self.value_G1.append(eps_value_g1)
+            self.value_G2.append(eps_value_g2)
+            self.value_G3.append(eps_value_g3)
 
 
 
@@ -801,6 +969,17 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         torch.save(self.cost_upper_model.state_dict(), path + "_cq_upper")
         torch.save(self.review_upper_model.state_dict(), path + "_cv_upper")
 
+    def save(self, path):
+        path = path
+
+        torch.save(self.dqn_meta.state_dict(), path + "_rq_meta")
+        torch.save(self.dqn_lower.state_dict(), path + "_rq_lower")
+
+        torch.save(self.cost_lower_model.state_dict(), path + "_cq_lower")
+        torch.save(self.cost_lower_value_model.state_dict(), path + "_cfv_lower")
+        #torch.save(self.review_lower_model.state_dict(), path + "_cv_lower")
+        torch.save(self.cost_upper_model.state_dict(), path + "_cq_upper")
+        torch.save(self.review_upper_model.state_dict(), path + "_crv_upper")
     def load(self):
 
         path = self.save_dir + "z" + self.exp_no
@@ -812,3 +991,18 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         self.review_lower_model.load_state_dict(torch.load(path + "_cv_lower"))
         self.cost_upper_model.load_state_dict(torch.load(path + "_cq_upper"))
         self.review_upper_model.load_state_dict(torch.load(path + "_cv_upper"))
+
+    #this function is for debugging
+    def load(self, eps_no):
+
+        eps_no = str(eps_no)
+        path = self.save_dir + "z_" + eps_no
+        print(path)
+        self.dqn_meta.load_state_dict(torch.load(path + "_rq_meta"))
+        self.dqn_lower.load_state_dict(torch.load( path + "_rq_lower"))
+
+        self.cost_lower_model.load_state_dict(torch.load( path + "_cq_lower"))
+        self.cost_lower_value_model.load_state_dict(torch.load(path + "_cfv_lower"))
+        #self.review_lower_model.load_state_dict(torch.load(path + "_cv_lower"))
+        self.cost_upper_model.load_state_dict(torch.load(path + "_cq_upper"))
+        self.review_upper_model.load_state_dict(torch.load(path + "_crv_upper"))

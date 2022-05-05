@@ -40,6 +40,10 @@ class SafeSarsaAgent(object):
         self.action_mask_L = []
         self.cost_L = []
 
+        self.f_q_value = []
+        self.r_value = []
+
+
         self.save_dir = save_dir
         self.exp_no = exp_no
 
@@ -302,10 +306,12 @@ class SafeSarsaAgent(object):
         ep_constraint = 0
         start_time = time.time()
 
-        C = 0
+
         psg = state
         done = False
         while self.num_episodes < self.args.num_episodes:
+
+            C = 0
 
             values      = []
             c_q_vals    = []
@@ -324,6 +330,9 @@ class SafeSarsaAgent(object):
             eps_cost_estimate_l = []
             eps_action_mask_l = []
             eps_cost_l = []
+
+            eps_f_q_value = []
+            eps_r_value = []
 
             # n-step sarsa
             for _ in range(self.args.traj_len):
@@ -356,7 +365,10 @@ class SafeSarsaAgent(object):
 
                 eps_cost_estimate_l.append(cost_estimate)
                 eps_action_mask_l.append(action_mask)
+
                 eps_cost_l.append(C)
+                eps_f_q_value.append(cost_q_val.item())
+                eps_r_value.append(cost_r_val.item())
 
                 values.append(Q_value)
                 c_r_vals.append(cost_r_val)
@@ -397,9 +409,12 @@ class SafeSarsaAgent(object):
                         ep_constraint = 0
 
                     self.num_episodes += 1
-                    self.action_mask_L.append(eps_action_mask_l)
-                    self.cost_estimate_L.append(eps_cost_estimate_l)
+
+                    #self.action_mask_L.append(eps_action_mask_l)
+                    #self.cost_estimate_L.append(eps_cost_estimate_l)
                     self.cost_L.append(eps_cost_l)
+                    self.f_q_value.append(eps_f_q_value)
+                    self.r_value.append(eps_r_value)
 
 
 
@@ -409,10 +424,14 @@ class SafeSarsaAgent(object):
                         p1 = self.save_dir + "cost_estimate_" + self.exp_no
                         p2 = self.save_dir + "cost_" + self.exp_no
                         p3 = self.save_dir + "action_mask" + self.exp_no
+                        p4 = self.save_dir + "f_q_value" + self.exp_no
+                        p5 = self.save_dir + "r_value" + self.exp_no
 
-                        torch.save(self.cost_estimate_L, p1)
+                        #torch.save(self.cost_estimate_L, p1)
                         torch.save(self.cost_L, p2)
-                        torch.save(self.action_mask_L, p3)
+                        #torch.save(self.action_mask_L, p3)
+                        torch.save(self.f_q_value, p4)
+                        torch.save(self.r_value, p5)
 
                         eval_reward, eval_constraint = self.eval()
 

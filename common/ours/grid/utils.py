@@ -26,8 +26,9 @@ def euclidian_distance(value1, value2, grid_size):
     max = (math.sqrt(2*grid_size**2))
 
     d = (x1-x2)**2 + (y1-y2)**2
-    return sqrt(d)/max
 
+    #return sqrt(d)/max
+    return sqrt(d)
 
 #class that defines goal space
 class Goal_Space():

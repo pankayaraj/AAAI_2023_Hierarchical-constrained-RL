@@ -53,7 +53,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
         self.TRAIN_REWARDS = []
         self.TRAIN_CONSTRAINTS = []
 
-
+        self.intrinsice_global_reward = 1000
+        self.per_step_penalty = -1
 
         self.args = args
 
@@ -241,6 +242,10 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 quantity_2 = self.args.d0 + (cost_q_val + cost_r_val - current_cost)
 
 
+                print(self.cost_upper_model(initial_state), "q")
+                print(quantity_1, quantity_2)
+
+
                 # find the action set that satisfies the constraints
                 # create the filtered mask here
                 constraint_mask = torch.le(quantity_1, quantity_2).float().squeeze(0)
@@ -424,8 +429,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                         action = self.safe_deterministic_pi_lower(state=state, initial_state=initial_state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost)
 
                         next_state, reward, done, info = self.env.step(action=action.item())
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                        #instrinc_reward = self.G.intrisic_reward(current_state=next_state,goal_state=goal_hot_vec)
+
 
                         if t_lower == 0:
                             begin_mask_l = True
@@ -436,6 +441,10 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                         next_state = torch.FloatTensor(next_state).to(self.device)
                         done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
+                        if done_l:
+                            instrinc_reward = self.intrinsice_global_reward
+                        else:
+                            instrinc_reward = self.per_step_penalty
                         #print(action)
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
                         #print(action, torch.LongTensor(action))
@@ -699,7 +708,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
             initial_state = state
             while t_lower <= self.args.max_ep_len_l-1:
 
-                action = self.safe_deterministic_pi_lower(state=state, initial_state=initial_state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost, greedy_eval=True)
+                action = self.safe_deterministic_pi_lower(state=state, initial_state=initial_state, goal=goal_hot_vec,
+                                                          goal_discrete=goal, current_cost=current_cost, greedy_eval=True)
                 # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                 # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
