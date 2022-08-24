@@ -242,8 +242,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 quantity_2 = self.args.d0 + (cost_q_val + cost_r_val - current_cost)
 
 
-                print(self.cost_upper_model(initial_state), "q")
-                print(quantity_1, quantity_2)
+                #print(self.cost_upper_model(initial_state), "q")
+                #print(quantity_1, quantity_2)
 
 
                 # find the action set that satisfies the constraints
@@ -346,23 +346,21 @@ class HRL_Discrete_Safe_Global_Constraint(object):
             next_state = None
             done = None
 
-            states_u      = []
-            actions_u     = []
 
-
-            rewards     = []
-            done_masks  = []
-            constraints = []
 
             IR_t = []
             Goals_t = []
             CS_t = []
             T_t = []
 
-
+              # this is so that we can compute n-step return. But in the current case n is 1 for upper so list will only have one value
 
             t_upper = 0
+
+
+
             while not done:
+
                 values_upper = []
                 rewards_upper = []
                 done_masks = []
@@ -371,7 +369,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 cost_q_upper = []
                 cost_r_upper = []
 
-                prev_states_u = [] #this is so that we can compute n-step return. But in the current case n is 1 for upper so list will only have one value
+                prev_states_u = []
+
 
                 prev_states_u.append(state)
 
@@ -465,8 +464,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                         q_values_lower = self.dqn_lower(state=state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
 
-                        if t_lower == 0:
-                            constraints_upper.append(Q_value_lower)
+                        #if t_lower == 0:
+                        #    constraints_upper.append(Q_value_lower)
 
                         cost_values_lower = self.cost_lower_model(state=state_goal)
                         Cost_value = cost_values_lower.gather(0, action[0])
@@ -554,24 +553,18 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                     if done:
                         break
 
-
-
-
-                #prev_states_u.append(previous_state)
-
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
-                #constraints_upper.append(C)
+                constraints_upper.append(C)
                 cost_q_upper.append(Cost_value_Upper)
                 cost_r_upper.append(Review_value_Upper)
                 done_masks.append((1 - done))
                 begin_mask_upper.append((1 - begin_mask_u))
 
-
                 CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
 
-                #next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
+                # next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
 
                 next_goal = self.pi_meta(next_state)
                 next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
@@ -612,6 +605,13 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                 self.review_upper_optimizer.zero_grad()
                 cost_review_loss.backward()
                 self.review_upper_optimizer.step()
+
+                if self.num_episodes % 100 == 0:
+                    print("Upper")
+                    print("forward")
+                    print(C_q_vals, C_q_targets, constraints_upper)
+                    print("reverse")
+                    print(C_r_vals, C_r_targets, constraints_upper)
 
 
                 if done:
@@ -658,6 +658,8 @@ class HRL_Discrete_Safe_Global_Constraint(object):
                     state = self.env.reset() #reset
                     state = torch.FloatTensor(state).to(device=self.device)
                     break #this break is to terminate the higher tier episode as the episode is now over
+
+                    # prev_states_u.append(previous_state)
 
 
 

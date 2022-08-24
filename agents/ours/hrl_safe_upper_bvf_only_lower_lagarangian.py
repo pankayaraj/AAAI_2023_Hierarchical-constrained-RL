@@ -32,8 +32,9 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                  writer = None,
                  save_dir=None,
                  exp_no=None,
-                 #lam= 0.05,
-                 lam=1,
+                 #lam= 0.5,
+                 lam= 1,
+                 #lam=1,
                  ):
         """
         init the agent here
@@ -68,6 +69,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         else:
             raise Exception("Must Specify the goal space as a list")
 
+        self.goal_space = goal_space
+
         self.r_path = save_dir + "r" + exp_no
         self.c_path = save_dir + "c" + exp_no
 
@@ -87,10 +90,10 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         self.G = Goal_Space(goal_space=goal_space, grid_size=self.env.size)
         self.grid_size = self.env.size
 
-        c = []
-        for i in goal_space:
-            c.append(self.G.convert_value_to_coordinates(i))
-        print(c)
+        #c = []
+        #for i in goal_space:
+        #    c.append(self.G.convert_value_to_coordinates(i))
+        #print(c)
 
         self.eval_env = copy.deepcopy(env)
 
@@ -117,7 +120,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid"or self.args.env_name == "puddle":
             self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
@@ -172,8 +175,11 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
         self.num_episodes = 0
         #50000
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(300000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        #self.eps_u_decay = LinearSchedule(300000 * 200, 0.01, 1.0)
+        #self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+
+        self.eps_u_decay = LinearSchedule(40000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(30000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
@@ -189,6 +195,10 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif self.args.env_name == "four_rooms":
+            self.cost_indicator = 'pit'
+        elif "puddle" in self.args.env_name:
             self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
@@ -467,11 +477,27 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 #goal = self.pi_meta(state=state)
                 goal = self.safe_deterministic_pi_upper(state)
 
-                x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-                Goals_t.append((x_g, y_g))
+                if self.args.env_name == "grid_key":
+                    x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
+                    Goals_t.append((x_g, y_g, self.G.goal_space[goal.item()]))
 
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid":
+                    goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    Goals_t.append(self.goal_space[goal.item()])
+
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                elif self.args.env_name == "puddle":
+                    Goals_t.append(self.G.goal_space[goal.item()])
+
+                    goal_np = self.goal_space[goal.item()]
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = torch.FloatTensor(goal_np).to(self.device)
+
 
                 q_values_upper = self.dqn_meta(state)
                 Q_value_upper = q_values_upper.gather(0, goal[0])
@@ -492,8 +518,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 F_l = []
                 C_l = []
 
-                goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+
 
                 # debug parameters
                 eps_f_q_value_U.append(Cost_value_Upper.item())
@@ -536,12 +561,18 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
                     c_temp = 0
                     for n_l in range(self.args.traj_len_l):
+
                         #action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost)
                         action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=None)
 
-                        next_state, reward, done, info = self.env.step(action=action.item())
+
+                        if self.args.env_name == "grid_key":
+                            next_state, reward, done, info = self.env.step(action.item())
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
+                            next_state, reward, done, info = self.env.step(action)
+
                         #instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                        #                                         goal_state=goal_hot_vec)
+                        #                                            goal_state=goal_hot_vec)
 
                         if t_lower == 0:
                             begin_mask_l = True
@@ -550,7 +581,13 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
 
                         next_state = torch.FloatTensor(next_state).to(self.device)
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
+
+                        if self.args.env_name == "grid_key":
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid"  :
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+                        elif self.args.env_name == "puddle":
+                            done_l = np.linalg.norm((np.array(next_state.tolist()) - np.array(goal_np)), ord=1) < self.env.goal_threshold
 
                         if done_l:
                             instrinc_reward =self.global_intrinsic_reward
@@ -617,6 +654,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
                         #break if goal is current_state or the if the main episode terminated
                         if done or done_l:
+
                             break
 
                         if t_lower > self.args.max_ep_len_l-1:
@@ -691,6 +729,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                     self.value_critic_lower_optimizer.step()
 
                     if done:
+
+
                         break
 
 
@@ -712,7 +752,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
                 d_m.append(done)
 
-                CS_t.append((x_c, y_c))
+                #CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
 
                 #if self.num_episodes%100 == 0:
@@ -733,8 +773,8 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                     if self.num_episodes % self.args.eval_every == 0:
                         # self.save() #save models
 
-                        path = self.save_dir + "policy_" + self.exp_no + "/" + "z_" + str(self.num_episodes // 1000)
-                        self.save(path=path)
+                        #path = self.save_dir + "policy_" + self.exp_no + "/" + "z_" + str(self.num_episodes // 1000)
+                        #self.save(path=path)
 
                         p1 = self.save_dir + "cost_U_" + self.exp_no
                         p2 = self.save_dir + "cost_L_" + self.exp_no
@@ -747,6 +787,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         p8 = self.save_dir + "value_g2_" + self.exp_no
                         p9 = self.save_dir + "value_g3_" + self.exp_no
 
+                        """
                         torch.save(self.cost_U, p1)
                         torch.save(self.cost_L, p2)
 
@@ -759,7 +800,7 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                         torch.save(self.value_G1, p7)
                         torch.save(self.value_G2, p8)
                         torch.save(self.value_G3, p9)
-
+                        """
                         eval_reward, eval_constraint, IR, Goals, CS = self.eval()
 
                         print("Epsilon Upper and Lower:" + str(self.eps_u) + ", " + str(self.eps_l))
@@ -904,13 +945,23 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
             # get the goal
             goal = self.safe_deterministic_pi_upper(state=state, greedy_eval=True)
 
-            x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-            Goals.append((x_g, y_g))
+            if self.args.env_name == "grid_key":
+                x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
 
-            goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+            elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid":
+                goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-            goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-            goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                Goals.append(self.goal_space[goal.item()])
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+            elif self.args.env_name == "puddle":
+
+                goal_np = self.goal_space[goal.item()]
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                goal_hot_vec = torch.FloatTensor(goal_np).to(self.device)
 
             t_lower = 0
             ir = 0
@@ -922,7 +973,11 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
                 # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                 # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
-                next_state, reward, done, info = self.eval_env.step(action.item())
+                if self.args.env_name == "grid_key":
+                    next_state, reward, done, info = self.env.step(action=action.item())
+                elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid"or self.args.env_name == "puddle":
+                    next_state, reward, done, info = self.env.step(action=action)
+
                 ep_reward += reward
                 ep_len += 1
                 ep_constraint += info[self.cost_indicator]
@@ -947,14 +1002,16 @@ class HRL_Discrete_Safe_Upper_BVF_Only_lower_Lagrangian(object):
 
             IR.append(ir)
 
-            x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
+            #x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
 
-            CS.append((x_c, y_c))
+            #CS.append((x_c, y_c))
+
 
         avg_reward.append(ep_reward)
         avg_constraint.append(ep_constraint)
 
         #print(avg_reward, avg_constraint)
+        print(CS)
         return np.mean(avg_reward), np.mean(avg_constraint), IR, Goals, CS
 
 

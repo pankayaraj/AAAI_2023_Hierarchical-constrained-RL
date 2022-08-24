@@ -42,6 +42,8 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         else:
             raise Exception("Must Specify the goal space as a list")
 
+        self.goal_space = goal_space
+
         self.r_path = save_dir + "r" + exp_no
         self.c_path = save_dir + "c" + exp_no
 
@@ -57,13 +59,14 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         #for the time being let's skip the vectorized environment's added complexity in HRL
         self.env = create_env(args)
+
         self.G = Goal_Space(goal_space=goal_space, grid_size=self.env.size)
         self.grid_size = self.env.size
 
-        c = []
-        for i in goal_space:
-            c.append(self.G.convert_value_to_coordinates(i))
-        print(c)
+        #c = []
+        #for i in goal_space:
+        #    c.append(self.G.convert_value_to_coordinates(i))
+        #print(c)
 
         self.eval_env = copy.deepcopy(env)
 
@@ -86,7 +89,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
             self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
@@ -122,12 +125,17 @@ class HRL_Discrete_Goal_SarsaAgent(object):
         self.num_episodes = 0
 
         #different epsilon for different levels
-        self.eps_u_decay = LinearSchedule(100000 * 200, 0.01, 1.0)
-        self.eps_l_decay = LinearSchedule(50000 * 200, 0.01, 1.0)
+        #self.eps_u_decay = LinearSchedule(300000 * 200, 0.01, 1.0)
+        #self.eps_l_decay = LinearSchedule(200000 * 200, 0.01, 1.0)
+
+        self.eps_u_decay = LinearSchedule(30000 * 200, 0.01, 1.0)
+        self.eps_l_decay = LinearSchedule(20000 * 200, 0.01, 1.0)
 
         #decide on weather to use total step or just the meta steps for this annealing
         self.eps_u = self.eps_u_decay.value(self.total_steps)
         self.eps_l = self.eps_l_decay.value(self.total_lower_time_steps)
+
+
 
         # for storing resutls
         self.results_dict = {
@@ -139,6 +147,12 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "four_rooms" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "complex_gridd" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "puddle" in self.args.env_name:
             self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
@@ -256,11 +270,13 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             CS_t = []
             T_t = []
 
+            values_upper = []
+            rewards_upper = []
+            done_masks = []
+
             while not done:
             #for n_u in range(self.args.traj_len_u):
-                values_upper = []
-                rewards_upper = []
-                done_masks = []
+
 
 
 
@@ -270,10 +286,29 @@ class HRL_Discrete_Goal_SarsaAgent(object):
 
                 goal = self.pi_meta(state=state)
 
-                x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-                Goals_t.append((x_g, y_g, self.G.goal_space[goal.item()]))
 
-                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+
+                if self.args.env_name == "grid_key":
+                    Goals_t.append(self.G.goal_space[goal.item()])
+
+                    x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
+                    Goals_t.append((x_g, y_g, self.G.goal_space[goal.item()]))
+
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid":
+                    Goals_t.append(self.G.goal_space[goal.item()])
+
+                    goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                elif self.args.env_name == "puddle":
+                    Goals_t.append(self.G.goal_space[goal.item()])
+
+                    goal_np = self.goal_space[goal.item()]
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = torch.FloatTensor(goal_np).to(self.device)
 
                 q_values_upper = self.dqn_meta(state)
                 Q_value_upper = q_values_upper.gather(0, goal[0])
@@ -284,8 +319,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 eps_reward_lower = 0
                 R = 0
 
-                goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+
 
 
                 #this will terminate of the current lower level episoded went beyond limit
@@ -298,14 +332,39 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     for n_l in range(self.args.traj_len_l):
                         action = self.pi_lower(state=state, goal=goal_hot_vec)
 
-                        next_state, reward, done, info = self.env.step(action=action.item())
-
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                        if self.args.env_name == "grid_key":
+                            next_state, reward, done, info = self.env.step(action=action.item())
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
+                            next_state, reward, done, info = self.env.step(action=action)
+                        #instrinc_reward = self.G.intrisic_reward(current_state=next_state,goal_state=goal_hot_vec)
 
                         next_state = torch.FloatTensor(next_state).to(self.device)
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
 
+                        if self.args.env_name == "grid_key":
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid":
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+                        elif self.args.env_name == "puddle":
+                            done_l = np.linalg.norm((np.array(next_state.tolist()) - np.array(goal_np)), ord=1) < self.env.goal_threshold
+
+
+
+                        current_state = next_state
+                        goal_state = next_state
+                        current_value = torch.argmax(current_state).item()
+                        goal_value = torch.argmax(goal_state).item()
+
+
+
+
+
+                        if self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
+                            if done_l:
+                                instrinc_reward = 1000
+                            else:
+                                instrinc_reward = -1
+                        #else:
+                        #    instrinc_reward = self.G.intrinsic_reward_FR_CG(self.env, done_l, next_state, goal_hot_vec)
 
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
 
@@ -340,7 +399,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                         if done or done_l:
                             break
 
-                    x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
+                    #x_c, y_c = self.G.convert_value_to_coordinates(self.G.convert_hot_vec_to_value(next_state).item())
 
 
                     next_state_goal = torch.cat((next_state, goal_hot_vec))
@@ -368,23 +427,10 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 rewards_upper.append(R)
                 done_masks.append((1 - done))
 
-                CS_t.append((x_c, y_c))
+                #CS_t.append((x_c, y_c))
                 T_t.append(t_lower)
 
-                next_goal = self.pi_meta(next_state)
-                next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-                next_values = self.dqn_meta(next_state)
-                Next_Value = next_values.gather(0, next_goal[0])
 
-                target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
-                Q_targets_upper = torch.cat(target_Q_values_upper).detach()
-                Q_values_upper = torch.cat(values_upper)
-
-                loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
-
-                self.optimizer_meta.zero_grad()
-                loss_upper.backward()
-                self.optimizer_meta.step()
 
                 if done:
 
@@ -429,8 +475,20 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                     state = torch.FloatTensor(state).to(device=self.device)
                     break #this break is to terminate the higher tier episode as the episode is now over
 
+            next_goal = self.pi_meta(next_state)
+            next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
+            next_values = self.dqn_meta(next_state)
+            Next_Value = next_values.gather(0, next_goal[0])
 
+            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
+            Q_targets_upper = torch.cat(target_Q_values_upper).detach()
+            Q_values_upper = torch.cat(values_upper)
 
+            loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
+
+            self.optimizer_meta.zero_grad()
+            loss_upper.backward()
+            self.optimizer_meta.step()
 
 
 
@@ -445,6 +503,7 @@ class HRL_Discrete_Goal_SarsaAgent(object):
             for _ in range(self.args.eval_n):
 
                 state = self.eval_env.reset()
+
                 state = torch.FloatTensor(state).to(self.device)
                 previous_state = state
                 done = False
@@ -459,29 +518,44 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                 while not done:
 
                     # convert the state to tensor
-
+                    print(self.eval_env.pos)
 
                     # get the goal
                     goal = self.pi_meta(state, greedy_eval=True)
 
-                    x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-                    Goals.append((x_g, y_g))
+                    Goals.append(self.G.goal_space[goal.item()])
 
-                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    if self.args.env_name == "grid_key":
+                        x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
+
+                        goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                        goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                        goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                    elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid":
+                        goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                        goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                        goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    elif self.args.env_name == "puddle":
 
 
-                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                        goal_np = self.goal_space[goal.item()]
+                        goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                        goal_hot_vec = torch.FloatTensor(goal_np).to(self.device)
+
 
                     t_lower = 0
                     ir = 0
                     while t_lower <= self.args.max_ep_len_l:
 
+
                         action = self.pi_lower(state, goal_hot_vec, greedy_eval=True)
                         #print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                         #print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
+                        if self.args.env_name == "grid_key":
+                            next_state, reward, done, info = self.eval_env.step(action.item())
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
+                            next_state, reward, done, info = self.eval_env.step(action)
 
-                        next_state, reward, done, info = self.eval_env.step(action.item())
                         ep_reward += reward
                         ep_len += 1
                         ep_constraint += info[self.cost_indicator]
@@ -502,8 +576,17 @@ class HRL_Discrete_Goal_SarsaAgent(object):
                         previous_state = state
                         state = next_state
 
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                        if self.args.env_name == "grid_key":
+                            done_l = self.G.validate(current_state=next_state,
+                                                     goal_state=goal_hot_vec)  # this is to validate the end of the lower level episode
+                        elif self.args.env_name == "four_rooms" or self.args.env_name == "complex-grid" or self.args.env_name == "puddle":
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+
+                        if done_l:
+                            instrinc_reward = 1000
+                        else:
+                            instrinc_reward = -1
+
                         ir += instrinc_reward
                         t_lower += 1
 

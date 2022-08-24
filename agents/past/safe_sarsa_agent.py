@@ -35,6 +35,9 @@ class SafeSarsaAgent(object):
         """
         init agent
         """
+        self.args = args
+        self.args.cost_reverse_lr = 5e-5
+        self.args.cost_q_lr = 5e-5
 
         self.cost_estimate_L = []
         self.action_mask_L = []
@@ -55,7 +58,7 @@ class SafeSarsaAgent(object):
 
 
         self.eval_env = copy.deepcopy(env)
-        self.args = args
+
 
         self.state_dim = env.reset().shape
 
@@ -72,7 +75,7 @@ class SafeSarsaAgent(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "puddle" :
             self.dqn = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
             self.dqn_target = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
 
@@ -103,9 +106,9 @@ class SafeSarsaAgent(object):
 
             return _thunk
 
-        envs = [make_env() for i in range(self.args.num_envs)]
-        self.envs = SubprocVecEnv(envs)
-
+        #envs = [make_env() for i in range(self.args.num_envs)]
+        #self.envs = SubprocVecEnv(envs)
+        self.env = env
 
 
         # create epsilon  and beta schedule
@@ -126,6 +129,10 @@ class SafeSarsaAgent(object):
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
             self.cost_indicator = 'pit'
+        elif "four_rooms" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "puddle" in self.args.env_name:
+            self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
 
@@ -140,10 +147,16 @@ class SafeSarsaAgent(object):
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:
+                if state.shape[0] != 1:
+                    state = state.unsqueeze(0)
+
+
                 q_value = self.dqn(state)
 
                 # chose the max/greedy actions
-                action = q_value.max(1)[1].cpu().numpy()
+                action = np.array([q_value.max(1)[1].cpu().numpy()])
+                action = np.reshape(action, newshape=(self.args.num_envs,))
+
             else:
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
 
@@ -158,23 +171,31 @@ class SafeSarsaAgent(object):
             # to take random action or not
             if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:
                 # No random action
+                if state.shape[0] != 1:
+                    state = state.unsqueeze(0)
+
                 q_value = self.dqn(state)
 
                 # Q_D(s,a)
                 cost_q_val = self.cost_model(state)
                 cost_r_val = self.review_model(state)
 
+
                 # find the action set
                 # create the filtered mask here
                 constraint_mask = torch.le(cost_q_val + cost_r_val, self.args.d0 + current_cost).float()
 
+
                 filtered_Q = (q_value + 1000.0) * (constraint_mask)
 
-                filtered_action = filtered_Q.max(1)[1].cpu().numpy()
-
+                filtered_action = np.array([filtered_Q.max(1)[1].cpu().numpy()])
+                filtered_action = np.reshape(filtered_action, newshape=(self.args.num_envs,))
                 # alt action to take if infeasible solution
                 # minimize the cost
-                alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
+
+
+                alt_action = np.array([(-1. * cost_q_val).max(1)[1].cpu().numpy()])
+                alt_action = np.reshape(alt_action, newshape=(self.args.num_envs,))
 
                 c_sum = constraint_mask.sum(1)
                 action_mask = ( c_sum == torch.zeros_like(c_sum)).cpu().numpy()
@@ -190,52 +211,6 @@ class SafeSarsaAgent(object):
 
                 return action, None, None
 
-    def safe_deterministic_pi_softmax(self, state,  current_cost=0.0, greedy_eval=False):
-        """
-        take the action based on the current policy
-        """
-
-        with torch.no_grad():
-
-
-            q_value = self.dqn(state)
-
-            # Q_D(s,a)
-            cost_q_val = self.cost_model(state)
-            cost_r_val = self.review_model(state)
-
-            softmax = torch.nn.Softmax(dim=1)
-
-            constraint_mask = torch.le(cost_q_val + cost_r_val, self.args.d0 + current_cost).float()
-            filtered_Q = (q_value + 1000.0) * (constraint_mask)
-
-            c_sum = constraint_mask.sum(1)
-            action_mask = (c_sum == torch.zeros_like(c_sum)).cpu().numpy()
-
-            if greedy_eval == "False":
-                prob_1 = softmax(filtered_Q)
-                c_1 = torch.cumsum(prob_1, dim=1)
-                c_1 = c_1.cpu().detach().numpy()
-                u_1 = np.random.rand(c_1.shape[0], 1)
-                filtered_action = (u_1 < c_1).argmax(axis=1)
-
-
-                prob_2 = softmax(-1.*cost_q_val)
-                c_2 = torch.cumsum(prob_2, dim=1)
-                c_2 = c_2.cpu().detach().numpy()
-                u_2 = np.random.rand(c_2.shape[0], 1)
-                alt_action = (u_2 < c_2).argmax(axis=1)
-
-                action = (1 - action_mask) * filtered_action + action_mask * alt_action
-            else:
-
-                filtered_action = filtered_Q.max(1)[1].cpu().numpy()
-                alt_action = (-1. * cost_q_val).max(1)[1].cpu().numpy()
-                action = (1 - action_mask) * filtered_action + action_mask * alt_action
-
-                return action
-
-        return action
 
     def set_policy(self):
         self.policy = self.safe_deterministic_pi
@@ -297,7 +272,7 @@ class SafeSarsaAgent(object):
         self.eval_steps = 0
 
         # reset state and env
-        state = self.envs.reset()
+        state = self.env.reset()
         prev_state = torch.FloatTensor(state).to(self.device)
         current_cost = torch.zeros(self.args.num_envs,1).float().to(self.device)
 
@@ -341,7 +316,7 @@ class SafeSarsaAgent(object):
 
                 # get the action
                 action, cost_estimate, action_mask = self.policy(state, current_cost= current_cost)
-                next_state, reward, done, info = self.envs.step(action)
+                next_state, reward, done, info = self.env.step(action)
 
 
 
@@ -350,18 +325,18 @@ class SafeSarsaAgent(object):
                 action = torch.LongTensor(action).unsqueeze(1).to(self.device)
 
                 q_values = self.dqn(state)
-                Q_value = q_values.gather(1, action)
+                Q_value = q_values.gather(0, action[0])
 
                 c_q_values = self.cost_model(state)
-                cost_q_val = c_q_values.gather(1, action)
+                cost_q_val = c_q_values.gather(0, action[0])
 
                 cost_r_val = self.review_model(state)
 
                 # logging mode for only agent 1
-                ep_reward += reward[0]
-                ep_constraint += info[0][self.cost_indicator]
+                ep_reward += reward
+                ep_constraint += info[self.cost_indicator]
 
-                C += info[0][self.cost_indicator]
+                C += info[self.cost_indicator]
 
                 eps_cost_estimate_l.append(cost_estimate)
                 eps_action_mask_l.append(action_mask)
@@ -373,10 +348,10 @@ class SafeSarsaAgent(object):
                 values.append(Q_value)
                 c_r_vals.append(cost_r_val)
                 c_q_vals.append(cost_q_val)
-                rewards.append(torch.FloatTensor(reward).unsqueeze(1).to(self.device))
-                done_masks.append(torch.FloatTensor(1.0 - done).unsqueeze(1).to(self.device))
-                begin_masks.append(torch.FloatTensor([(1.0 - ci['begin']) for ci in info]).unsqueeze(1).to(self.device))
-                constraints.append(torch.FloatTensor([ci[self.cost_indicator] for ci in info]).unsqueeze(1).to(self.device))
+                rewards.append(reward)
+                done_masks.append((1.0 - done))
+                begin_masks.append((1.0 - info['begin']))
+                constraints.append(info[self.cost_indicator])
 
                 prev_states.append(prev_state)
                 states.append(state)
@@ -389,24 +364,27 @@ class SafeSarsaAgent(object):
                 # update the current cost
                 # if done flag is true for the current env, this implies that the next_state cost = 0.0
                 # because the agent starts with 0.0 cost (or doesn't have access to it anyways)
-                current_cost = torch.FloatTensor([(ci[self.cost_indicator] * (1.0 - di)) for ci,di in zip(info, done)]).unsqueeze(1).to(self.device)
+                current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).unsqueeze(1).to(self.device)
 
                 self.total_steps += (1 * self.args.num_envs)
 
                 # hack to reuse the same code
                 # iteratively add each done episode, so that can eval at regular interval
-                for d_idx in range(done.sum()):
+                if done:
 
 
-                    if done[0] and d_idx==0:
-                        if self.num_episodes % self.args.log_every == 0:
-                            self.log_episode_stats(ep_reward, ep_constraint)
+
+
+                    if self.num_episodes % 100 == 0:
+                        self.log_episode_stats(ep_reward, ep_constraint)
 
 
 
                         # reset the rewards anyways
-                        ep_reward = 0
-                        ep_constraint = 0
+                    ep_reward = 0
+                    ep_constraint = 0
+                    state = self.env.reset()
+                    state = torch.FloatTensor(state).to(device=self.device)
 
                     self.num_episodes += 1
 
@@ -419,7 +397,7 @@ class SafeSarsaAgent(object):
 
 
                     # eval the policy here after eval_every steps
-                    if self.num_episodes  % self.args.eval_every == 0:
+                    if self.num_episodes  % 1000 == 0:
 
                         p1 = self.save_dir + "cost_estimate_" + self.exp_no
                         p2 = self.save_dir + "cost_" + self.exp_no
@@ -472,9 +450,10 @@ class SafeSarsaAgent(object):
             # calculate targets here
             next_state = torch.FloatTensor(next_state).to(self.device)
             next_q_values = self.dqn(next_state)
+
             next_action, cost_estimate, action_mask = self.policy(next_state, current_cost)
             next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
-            next_q_values = next_q_values.gather(1, next_action)
+            next_q_values = next_q_values.gather(0, next_action[0])
 
             # calculate targets
             target_Q_vals = self.compute_n_step_returns(next_q_values, rewards, done_masks)
@@ -492,7 +471,7 @@ class SafeSarsaAgent(object):
 
             # calculate the cost-targets
             next_c_value = self.cost_model(next_state)
-            next_c_value = next_c_value.gather(1, next_action)
+            next_c_value = next_c_value.gather(0, next_action[0])
 
             cq_targets = self.compute_n_step_returns(next_c_value, constraints, done_masks)
             C_q_targets = torch.cat(cq_targets).detach()
@@ -549,9 +528,10 @@ class SafeSarsaAgent(object):
                     # convert the state to tensor
                     state =  torch.FloatTensor(state).to(self.device).unsqueeze(0)
 
+
                     # get the policy action
                     action, cost_estimate, action_mask = self.policy(state, current_cost=current_cost, greedy_eval=True)
-                    action = action[0]
+                    #action = action[0]
 
                     next_state, reward, done, info = self.eval_env.step(action)
                     ep_reward += reward
@@ -563,6 +543,7 @@ class SafeSarsaAgent(object):
                     # update the state
                     state = next_state
                     current_cost = torch.FloatTensor([info[self.cost_indicator] * (1.0 - done)]).to(self.device).unsqueeze(0)
+
 
 
                 avg_reward.append(ep_reward)

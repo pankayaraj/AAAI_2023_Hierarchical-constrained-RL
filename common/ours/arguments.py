@@ -14,11 +14,26 @@ def get_args():
 
 
 
-    parser.add_argument('--save_dir', type=str, default="results/grid/safe_upper_bvf_lower_lagrangian/new_exp_1/")
-    parser.add_argument('--exp_no', type=str, default="8")
-    parser.add_argument("--goal_space", type=list, default=[212,  160, 163])   #this is for discrete goal setting in an HRL setup
+    parser.add_argument('--save_dir', type=str, default="results/puddle/lyp_sarsa/")
+    parser.add_argument('--exp_no', type=str, default="6")
+
+    parser.add_argument("--goal_space", type=list, default=[[0.75,0.3],[0.9,0.9],[0.5,0.7],[0.1, 1.0]])   #this is for discrete goal setting in an HRL setup
+    #GRID
     #[212, 86, 160, 163, 282, 135, 200]
     #[212,  160, 163]
+
+    #FOUR ROOMS
+    #[52, 94, 26, 55]
+
+    #COMPLEX GRID
+    #[169, 170, 268, 418, 522]
+    #[55, 54, 129, 229, 280]
+
+    #puddle
+    #[[0.75,0.3],[0.9,0.9],[0.5,0.7],[0.1, 1.0]]
+
+
+    #[62, 32, 75]
     parser.add_argument("--cost_space", type=list, default=[0, 1,])  # this is for discrete cost space
     parser.add_argument("--cost_mapping", type=list, default=[ 0.3, 0.6,])  # this is for discrete cost space
     #[0.0, 0.3, 0.6, 0.9]  [0, 1, 2, 3]
@@ -29,7 +44,8 @@ def get_args():
                              "cheetah: safe-cheetah env\n"\
                              "grid: grid world env\n"\
                             "pc: point circle env\n" \
-                             "grid_key: grid_world env with key\n" \
+                             "grid_key: grid_world env with key\n"\
+                             "four_rooms: four rooms\n" \
                         )
 
     parser.add_argument('--agent', default='ppo',
@@ -43,7 +59,7 @@ def get_args():
                              "hrl-sarsa: for HRL n-step sarsa\n" \
                         )
     parser.add_argument('--gamma', type=float, default=0.99, help="discount factor")
-    parser.add_argument('--d0', type=float, default=90.0, help="the threshold for safety")
+    parser.add_argument('--d0', type=float, default=30.0, help="the threshold for safety")
 
     # Actor Critic arguments goes here
     parser.add_argument('--value-loss-coef', type=float, default=0.5,
@@ -66,7 +82,7 @@ def get_args():
     parser.add_argument('--traj_len_l', type=int, default=10,
                         help="lower level's maximum length of the trajectory for an update")
 
-    parser.add_argument('--early-stop', action='store_true',
+    parser.add_argument('--early-stop', action='store_false',
                         help="early stop pi training based on target KL ")
 
     # Optmization arguments
@@ -95,13 +111,16 @@ def get_args():
     # Training arguments
     parser.add_argument('--num-steps', type=int, default=int(1e4),
                         help="number of steps to train the agent")
-    parser.add_argument('--num-episodes', type=int, default=int(5e5),
-                        help="number of episodes to train the agetn")
+    parser.add_argument('--num-episodes', type=int, default=int(3e5),
+                        help="number of episodes to train the agent")
 
     parser.add_argument('--max_ep_len_u', type=int, default=int(5),
                         help="number of steps in an episode")
-    parser.add_argument('--max_ep_len_l', type=int, default=int(80),
-                        help="number of steps in an episode")
+
+    #parser.add_argument('--max_ep_len_l', type=int, default=int(80),help="number of steps in an episode")
+    #parser.add_argument('--max_ep_len_l', type=int, default=int(100),help="number of steps in an episode")
+    parser.add_argument('--max_ep_len_l', type=int, default=int(25), help="number of steps in an episode")
+
 
     # Evaluation arguments
     parser.add_argument('--eval-every', type=float, default=1000,

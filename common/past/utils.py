@@ -9,14 +9,21 @@ from rllab.misc import ext
 # from envs.mujoco.gather.point_gather_env import PointGatherEnv
 # from envs.mujoco.speeding.halfcheetah_speedlimit import SafeCheetahEnv
 
-"""
-from envs.custom_mujoco.point_gather import PointGatherEnv
-from envs.custom_mujoco.halfcheetah_speedlimit import SafeCheetahEnv
-from envs.rllib_mujoco.circle.point_env_safe import SafePointEnv
-"""
+
+from envs.past.custom_mujoco.point_gather import PointGatherEnv
+from envs.past.custom_mujoco.halfcheetah_speedlimit import SafeCheetahEnv
+#from envs.past.rllib_mujoco.circle.point_env_safe import SafePointEnv
+""""""
+
 from envs.past.grid.safety_gridworld import PitWorld
 from envs.ours.gird.safety_gridworld_with_key import PitWorld_Key
 from envs.ours.gird.safety_gridworld_key_2 import PitWorld_Key_2
+from envs.ours.four_rooms.four_rooms import Fourrooms
+from envs.ours.complex_grid.complex_grid import Complex_Grid
+from envs.ours.Puddles.puddles import PuddleSimpleEnv
+
+
+
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state',
                                        'done',))
 
@@ -106,7 +113,7 @@ def get_filename(args):
     # all the params that go in for the logging go over her
     toprint = ['agent', 'lr', 'batch_size', ]
     args_param = vars(args)
-
+    print(args.agent)
     if args.agent == "ppo":
         toprint += ['num_envs', 'ppo_updates', 'gae', 'clip', 'traj_len', 'beta', 'value_loss_coef', ]
     elif args.agent == "a2c":
@@ -219,6 +226,7 @@ def create_env(args):
                            rand_goal=False,  # for testing purposes
                            )
 
+
     elif args.env_name == "grid_key_2":
         env = PitWorld_Key_2(size=18,
                            max_step=200,
@@ -230,6 +238,13 @@ def create_env(args):
                            one_hot_features=True,
                            rand_goal=False,  # for testing purposes
                            )
+
+    elif args.env_name == "four_rooms":
+        env = Fourrooms(max_steps=100)
+    elif args.env_name == "complex-grid":
+        env = Complex_Grid(max_steps=400)
+    elif args.env_name == "puddle":
+        env = PuddleSimpleEnv(max_steps=50)
     else:
         raise Exception("Not implemented yet")
 

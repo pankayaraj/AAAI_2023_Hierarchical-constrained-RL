@@ -29,10 +29,19 @@ class LypSarsaAgent(object):
     def __init__(self,
                  args,
                  env,
+                 exp_no=None,
+                 save_dir=None,
                  writer = None):
         """
         init agent
         """
+
+        self.r_path = save_dir + "r" + exp_no
+        self.c_path = save_dir + "c" + exp_no
+
+        self.EVAL_REWARDS = []
+        self.EVAL_CONSTRAINTS = []
+
         self.eval_env = copy.deepcopy(env)
         self.args = args
 
@@ -51,7 +60,7 @@ class LypSarsaAgent(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "puddle" :
             self.dqn = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
             self.dqn_target = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
 
@@ -99,6 +108,10 @@ class LypSarsaAgent(object):
 
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "four_rooms" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "puddle" in self.args.env_name:
             self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
@@ -322,15 +335,23 @@ class LypSarsaAgent(object):
 
                     # eval the policy here after eval_every steps
                     if self.num_episodes  % self.args.eval_every == 0:
+
                         eval_reward, eval_constraint = self.eval()
+
+                        self.EVAL_REWARDS.append(eval_reward)
+                        self.EVAL_CONSTRAINTS.append(eval_constraint)
+
+                        torch.save(self.EVAL_REWARDS, self.r_path)
+                        torch.save(self.EVAL_CONSTRAINTS, self.c_path)
+
                         self.results_dict["eval_rewards"].append(eval_reward)
                         self.results_dict["eval_constraints"].append(eval_constraint)
 
                         log('----------------------------------------')
-                        log('Eval[R]: {:.2f}\t'.format(eval_reward) +\
-                            'Eval[C]: {}\t'.format(eval_constraint) +\
-                            'Episode: {}\t'.format(self.num_episodes) +\
-                            'avg_eval_reward: {:.2f}\t'.format(np.mean(self.results_dict["eval_rewards"][-10:])) +\
+                        log('Eval[R]: {:.2f}\t'.format(eval_reward) + \
+                            'Eval[C]: {}\t'.format(eval_constraint) + \
+                            'Episode: {}\t'.format(self.num_episodes) + \
+                            'avg_eval_reward: {:.2f}\t'.format(np.mean(self.results_dict["eval_rewards"][-10:])) + \
                             'avg_eval_constraint: {:.2f}\t'.format(np.mean(self.results_dict["eval_constraints"][-10:]))
                             )
                         log('----------------------------------------')
@@ -340,6 +361,8 @@ class LypSarsaAgent(object):
                             self.writer.add_scalar("eval_constraint", eval_constraint, self.eval_steps)
 
                         self.eval_steps += 1
+
+
 
 
 

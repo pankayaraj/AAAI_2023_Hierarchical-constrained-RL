@@ -27,15 +27,15 @@ from agents.a2c_agent import A2CAgent
 from agents.lyp_a2c_agent import LyapunovA2CAgent
 from agents.safe_a2c_v2_agent import SafeA2CProjectionAgent
 
-# PPO based agents
-from agents.ppo import PPOAgent
-from agents.safe_ppo import SafePPOAgent
+
 from agents.lyp_ppo import LyapunovPPOAgent
 # target based agents
 from agents.target_agents.target_bvf_ppo import TargetBVFPPOAgent
 from agents.target_agents.target_lyp_ppo import TargetLypPPOAgent
 """
-
+# PPO based agents
+from agents.past.ppo import PPOAgent
+from agents.past.safe_ppo import SafePPOAgent
 
 # get the args from argparse
 args = get_args()
@@ -81,6 +81,7 @@ agent = None
 # create the env here
 env = create_env(args)
 
+
 """
 # create the agent here
 # PPO based agents
@@ -111,12 +112,19 @@ from multiprocessing import freeze_support, set_start_method
 
 freeze_support()
 #  SARSA based agent
-if args.agent == "sarsa":
+if args.agent == "ppo":
+    agent = PPOAgent(args, env,writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
+elif args.agent == "bvf-ppo":
+    if args.target:
+        agent = TargetBVFPPOAgent(args, env)
+    else:
+        agent = SafePPOAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
+elif args.agent == "sarsa":
     agent = SarsaAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "bvf-sarsa":
     agent = SafeSarsaAgent(args, env, writer=tb_writer, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "lyp-sarsa":
-    agent = LypSarsaAgent(args, env, writer=tb_writer)
+    agent = LypSarsaAgent(args, env, writer=tb_writer,  save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "hrl-sarsa":
     agent = HRL_Discrete_Goal_SarsaAgent(args, env, save_dir=args.save_dir, exp_no=args.exp_no)
 elif args.agent == "safe-lower-hrl-sarsa":

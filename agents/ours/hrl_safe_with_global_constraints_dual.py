@@ -36,6 +36,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
         """
         init the agent here
         """
+
         self.exp_no = exp_no
         self.save_dir = save_dir
         args.num_envs = 1
@@ -43,7 +44,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
             goal_space = args.goal_space
         else:
             raise Exception("Must Specify the goal space as a list")
-
+        self.goal_space = goal_space
         self.r_path = save_dir + "r" + exp_no
         self.c_path = save_dir + "c" + exp_no
 
@@ -93,41 +94,40 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
         self.writer = writer
 
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms":
             self.dqn_meta = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
-            self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
-
             self.dqn_lower = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+
+            self.dqn_meta_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.dqn_lower_target = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.dqn_meta_target.load_state_dict(self.dqn_meta.state_dict())
+            self.dqn_lower_target.load_state_dict(self.dqn_lower.state_dict())
 
             # create more networks for lower level
             self.cost_lower_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
             self.review_lower_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
             self.cost_lower_value_model = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
 
-            #self.target_lower_cost_model = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
-            #self.target_lower_review_model = OneHotValueNetwork(self.goal_state_dim).to(self.device)
+            self.cost_lower_model_target = OneHotDQN(self.goal_state_dim, self.action_dim).to(self.device)
+            self.review_lower_model_target = OneHotValueNetwork(self.goal_state_dim).to(self.device)
+            self.cost_lower_value_model_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
+            self.cost_lower_model_target.load_state_dict(self.cost_lower_model.state_dict())
+            self.review_lower_model_target.load_state_dict(self.review_lower_model.state_dict())
+            self.cost_lower_value_model_target.load_state_dict(self.cost_lower_value_model.state_dict())
 
-            #self.target_lower_cost_model.load_state_dict(self.cost_lower_model.state_dict())
-            #self.target_lower_review_model.load_state_dict(self.review_lower_model.state_dict())
 
             # create more networks for higher level
             self.cost_upper_model = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
             self.review_upper_model = OneHotValueNetwork(self.state_dim).to(self.device)
 
-            #self.target_upper_cost_model = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
-            #self.target_upper_review_model = OneHotValueNetwork(self.state_dim).to(self.device)
-
-            #self.target_upper_cost_model.load_state_dict(self.cost_upper_model.state_dict())
-            #self.target_upper_review_model.load_state_dict(self.review_upper_model.state_dict())
-
-
+            self.cost_upper_model_target = OneHotDQN(self.state_dim, self.goal_dim).to(self.device)
+            self.review_upper_model_target = OneHotValueNetwork(self.state_dim).to(self.device)
+            self.cost_upper_model_target.load_state_dict(self.cost_upper_model.state_dict())
+            self.review_upper_model_target.load_state_dict(self.review_upper_model.state_dict())
         else:
             raise Exception("not implemented yet!")
 
-        # copy parameters
-        self.dqn_meta_target.load_state_dict(self.dqn_meta.state_dict())
-        self.dqn_lower_target.load_state_dict(self.dqn_lower.state_dict())
+
 
         self.optimizer_meta = torch.optim.Adam(self.dqn_meta.parameters(), lr=self.args.lr)
         self.optimizer_lower = torch.optim.Adam(self.dqn_lower.parameters(), lr=self.args.lr)
@@ -166,8 +166,26 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
             self.cost_indicator = 'pit'
+        elif "four_rooms" in self.args.env_name:
+            self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
+
+
+        self.hard_update_episode = 10000
+
+    def update_target_network(self):
+
+        self.dqn_meta_target.load_state_dict(self.dqn_meta.state_dict())
+        self.dqn_lower_target.load_state_dict(self.dqn_lower.state_dict())
+
+        self.cost_lower_model_target.load_state_dict(self.cost_lower_model.state_dict())
+        self.review_lower_model_target.load_state_dict(self.review_lower_model.state_dict())
+
+        self.cost_lower_value_model_target.load_state_dict(self.cost_lower_value_model.state_dict())
+        self.cost_upper_model_target.load_state_dict(self.cost_upper_model.state_dict())
+        self.review_upper_model_target.load_state_dict(self.review_upper_model.state_dict())
+
 
     def pi_meta(self, state, greedy_eval=False):
         """
@@ -238,7 +256,12 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                 quantity_1 = cost_q_val_upper + cost_r_val_upper
                 quantity_2 = self.args.d0 + (cost_q_val + cost_r_val - current_cost)
-
+                """
+                if self.num_episodes%10000 == 0:
+                    print("lower")
+                    print(cost_q_val_upper, cost_r_val_upper, cost_q_val, cost_r_val, current_cost)
+                    print("end")
+                """
 
                 # find the action set that satisfies the constraints
                 # create the filtered mask here
@@ -291,6 +314,12 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                 quantity_1 = cost_q_val_upper + cost_r_val_upper
                 quantity_2 = self.args.d0 + (cost_v_val)
 
+                """
+                if self.num_episodes%10000 == 0:
+                    print("upper")
+                    print(cost_q_val_upper , cost_r_val_upper, cost_v_val)
+                    print("end")
+                """
 
                 # find the action set that satisfies the constraints
                 # create the filtered mask here
@@ -403,17 +432,19 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
             CS_t = []
             T_t = []
 
-
-
             t_upper = 0
+
+            values_upper = []
+            rewards_upper = []
+            done_masks = []
+            constraints_upper = []
+            begin_mask_upper = []
+            cost_q_upper = []
+            cost_r_upper = []
+
+
             while not done:
-                values_upper = []
-                rewards_upper = []
-                done_masks = []
-                constraints_upper = []
-                begin_mask_upper = []
-                cost_q_upper = []
-                cost_r_upper = []
+
 
 
                 prev_states_u = [] #this is so that we can compute n-step return. But in the current case n is 1 for upper so list will only have one value
@@ -427,14 +458,24 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                 t_upper += 1
 
-                #goal = self.pi_meta(state=state)
-                goal = self.safe_deterministic_pi_upper(state)
+                goal = self.pi_meta(state=state)
+                #goal = self.safe_deterministic_pi_upper(state)
 
-                x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-                Goals_t.append((x_g, y_g))
+                if self.args.env_name == "grid_key":
+                    x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
+                    Goals_t.append((x_g, y_g, self.G.goal_space[goal.item()]))
 
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                elif self.args.env_name == "four_rooms":
 
-                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                    goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                    goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+
+                    Goals_t.append(self.goal_space[goal.item()])
+
+                    goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
                 q_values_upper = self.dqn_meta(state)
                 Q_value_upper = q_values_upper.gather(0, goal[0])
@@ -450,8 +491,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                 R = 0
                 C = 0
 
-                goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+
 
                 #L = None
                 #this will terminate of the current lower level episoded went beyond limit
@@ -475,9 +515,22 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     for n_l in range(self.args.traj_len_l):
                         action = self.safe_deterministic_pi_lower(state=state, goal=goal_hot_vec, goal_discrete=goal, current_cost=current_cost)
 
-                        next_state, reward, done, info = self.env.step(action=action.item())
-                        instrinc_reward = self.G.intrisic_reward(current_state=next_state,
-                                                                 goal_state=goal_hot_vec)
+                        if self.args.env_name == "grid_key":
+                            next_state, reward, done, info = self.env.step(action.item())
+                        elif self.args.env_name == "four_rooms":
+                            next_state, reward, done, info = self.env.step(action)
+                        #instrinc_reward = self.G.intrisic_reward(current_state=next_state,goal_state=goal_hot_vec)
+                        if self.args.env_name == "grid_key":
+                            done_l = self.G.validate(current_state=next_state,
+                                                     goal_state=goal_hot_vec)  # this is to validate the end of the lower level episode
+                        elif self.args.env_name == "four_rooms":
+                            done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)
+
+                        if done_l:
+                            instrinc_reward = 100
+                        else:
+                            instrinc_reward = -1
+
 
                         if t_lower == 0:
                             begin_mask_l = True
@@ -486,7 +539,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
 
                         next_state = torch.FloatTensor(next_state).to(self.device)
-                        done_l = self.G.validate(current_state=next_state, goal_state=goal_hot_vec)  #this is to validate the end of the lower level episode
+
 
                         #print(action)
                         action = torch.LongTensor(action).unsqueeze(1).to(self.device)
@@ -508,8 +561,8 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                         q_values_lower = self.dqn_lower(state=state_goal)
                         Q_value_lower = q_values_lower.gather(0, action[0])
 
-                        if t_lower == 0:
-                            constraints_upper.append(Q_value_lower)
+                        #if t_lower == 0:
+                        #    constraints_upper.append(Q_value_lower)
 
                         cost_values_lower = self.cost_lower_model(state=state_goal)
                         Cost_value = cost_values_lower.gather(0, action[0])
@@ -555,7 +608,8 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                     #update Reward Q value function
 
-                    next_values = self.dqn_lower(next_state_goal)
+                    #next_values = self.dqn_lower(next_state_goal)
+                    next_values = self.dqn_lower_target(next_state_goal)
                     Next_Value = next_values.gather(0, next_action[0])
 
 
@@ -570,7 +624,9 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     self.optimizer_lower.step()
 
                     #update cost Q value function
-                    next_c_value = self.cost_lower_model(next_state_goal)
+
+                    #next_c_value = self.cost_lower_model(next_state_goal)
+                    next_c_value = self.cost_lower_model_target(next_state_goal)
                     Next_c_value = next_c_value.gather(0, next_action[0])
 
                     cq_targets = self.compute_n_step_returns(Next_c_value, constraints_lower, done_masks_lower)
@@ -584,8 +640,8 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                     # For the constraints (reverse)
                     previous_state_goal = torch.cat((prev_states_l[0], goal_hot_vec))
-                    prev_value = self.review_lower_model(previous_state_goal)
-
+                    #prev_value = self.review_lower_model(previous_state_goal)
+                    prev_value = self.review_lower_model_target(previous_state_goal)
 
                     c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints_lower, begin_mask_lower)
                     C_r_targets = torch.cat(c_r_targets).detach()
@@ -596,7 +652,10 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     cost_review_loss.backward()
                     self.review_lower_optimizer.step()
 
-                    next_v_value = self.cost_lower_value_model(next_state).gather(0, goal[0])
+                    #next_v_value = self.cost_lower_value_model(next_state).gather(0, goal[0])
+                    next_v_value = self.cost_lower_value_model_target(next_state).gather(0, goal[0])
+
+
                     cv_targets = self.compute_n_step_returns(next_v_value, constraints_lower, done_masks_lower)
                     C_v_targets = torch.cat(cv_targets).detach()
                     C_v_vals = torch.cat(cost_v_lower)
@@ -605,6 +664,15 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     self.value_critic_lower_optimizer.zero_grad()
                     cost_value_critic_loss_lower.backward()
                     self.value_critic_lower_optimizer.step()
+
+
+                    """
+                    if self.num_episodes%1000 == 0:
+                        print("q_f, q_r, v_f")
+                        print(C_q_targets, C_q_vals, Next_c_value, constraints_lower)
+                        print(C_r_targets, C_r_vals, prev_value, constraints_lower)
+                        print(C_v_targets, C_v_vals, Next_c_value, constraints_lower)
+                    """
 
                     if done:
                         break
@@ -616,7 +684,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                 values_upper.append(Q_value_upper)
                 rewards_upper.append(R)
-                #constraints_upper.append(C)
+                constraints_upper.append(C)
                 cost_q_upper.append(Cost_value_Upper)
                 cost_r_upper.append(Review_value_Upper)
                 done_masks.append((1 - done))
@@ -628,45 +696,7 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
                 #next_state_cost = torch.cat((next_state, upper_cost_constraint.detach()))
 
-                next_goal = self.pi_meta(next_state)
-                next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
-                next_values = self.dqn_meta(next_state)
-                Next_Value = next_values.gather(0, next_goal[0])
-
-                target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
-                Q_targets_upper = torch.cat(target_Q_values_upper).detach()
-                Q_values_upper = torch.cat(values_upper)
-
-                loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
-                self.optimizer_meta.zero_grad()
-                loss_upper.backward()
-                self.optimizer_meta.step()
-
-                # update cost Q value function upper
-                next_c_value = self.cost_upper_model(next_state)
-                Next_c_value = next_c_value.gather(0, next_goal[0])
-
-                cq_targets = self.compute_n_step_returns(Next_c_value, constraints_upper, done_masks)
-                C_q_targets = torch.cat(cq_targets).detach()
-                C_q_vals = torch.cat(cost_q_upper)
-
-                cost_critic_loss_upper = F.mse_loss(C_q_vals, C_q_targets)
-                self.critic_upper_optimizer.zero_grad()
-                cost_critic_loss_upper.backward()
-                self.critic_upper_optimizer.step()
-
-                # For the constraints (reverse) upper
-                previous_state = prev_states_u[0]
-                prev_value = self.review_upper_model(previous_state)
-
-                c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints_upper, begin_mask_upper)
-                C_r_targets = torch.cat(c_r_targets).detach()
-                C_r_vals = torch.cat(cost_r_upper)
-
-                cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
-                self.review_upper_optimizer.zero_grad()
-                cost_review_loss.backward()
-                self.review_upper_optimizer.step()
+                
 
 
                 if done:
@@ -680,6 +710,9 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     if self.num_episodes % 500 == 0:
                         log("Goal State: "  + " " + str(Goals_t) + " Current State: " + str(CS_t))
                         #log("No of Higher Eps: " +  str(len(Goals_t)) + " No of lower eps: " + str(T_t)  + " Cost Allocation(future, lower) " + str(Cost_Alloc))
+
+                    if self.num_episodes % self.hard_update_episode == 0:
+                        self.update_target_network()
 
                     #evaluation logging
                     if self.num_episodes % self.args.eval_every == 0 :
@@ -714,7 +747,56 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                     state = torch.FloatTensor(state).to(device=self.device)
                     break #this break is to terminate the higher tier episode as the episode is now over
 
+            next_goal = self.pi_meta(next_state)
+            next_goal = torch.LongTensor(next_goal).unsqueeze(1).to(self.device)
 
+            #next_values = self.dqn_meta(next_state)
+            next_values = self.dqn_meta_target(next_state)
+            Next_Value = next_values.gather(0, next_goal[0])
+
+            target_Q_values_upper = self.compute_n_step_returns(Next_Value, rewards_upper, done_masks)
+            Q_targets_upper = torch.cat(target_Q_values_upper).detach()
+            Q_values_upper = torch.cat(values_upper)
+
+
+
+            loss_upper = F.mse_loss(Q_values_upper, Q_targets_upper)
+            self.optimizer_meta.zero_grad()
+            loss_upper.backward()
+            self.optimizer_meta.step()
+
+            # update cost Q value function upper
+            #next_c_value = self.cost_upper_model(next_state)
+            next_c_value = self.cost_upper_model_target(next_state)
+            Next_c_value = next_c_value.gather(0, next_goal[0])
+
+            cq_targets = self.compute_n_step_returns(Next_c_value, constraints_upper, done_masks)
+            C_q_targets = torch.cat(cq_targets).detach()
+            C_q_vals = torch.cat(cost_q_upper)
+
+            cost_critic_loss_upper = F.mse_loss(C_q_vals, C_q_targets)
+            self.critic_upper_optimizer.zero_grad()
+            cost_critic_loss_upper.backward()
+            self.critic_upper_optimizer.step()
+
+            # For the constraints (reverse) upper
+            previous_state = prev_states_u[0]
+            #prev_value = self.review_upper_model(previous_state)
+            prev_value = self.review_upper_model_target(previous_state)
+
+            c_r_targets = self.compute_reverse_n_step_returns(prev_value, constraints_upper, begin_mask_upper)
+            C_r_targets = torch.cat(c_r_targets).detach()
+            C_r_vals = torch.cat(cost_r_upper)
+
+            """
+            if self.num_episodes % 1000 == 0:
+                print(C_q_targets, C_q_vals, Next_c_value, constraints_upper)
+                print(C_r_targets, C_r_vals, prev_value, constraints_upper)
+            """
+            cost_review_loss = F.mse_loss(C_r_vals, C_r_targets)
+            self.review_upper_optimizer.zero_grad()
+            cost_review_loss.backward()
+            self.review_upper_optimizer.step()
 
 
     def eval(self):
@@ -747,16 +829,21 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
 
 
             # get the goal
-            #goal = self.pi_meta(state=state, greedy_eval=True)
-            goal = self.safe_deterministic_pi_upper(state, greedy_eval=True)
+            goal = self.pi_meta(state=state, greedy_eval=True)
+            #goal = self.safe_deterministic_pi_upper(state, greedy_eval=True)
 
-            x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
-            Goals.append((x_g, y_g))
+            if self.args.env_name == "grid_key":
+                x_g, y_g = self.G.convert_value_to_coordinates(self.G.goal_space[goal.item()])
 
-            goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
+                goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
+                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+            elif self.args.env_name == "four_rooms":
+                goal_hot_vec = self.env.conver_state_num_state(self.goal_space[goal.item()])
+                goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
 
-            goal_hot_vec = self.G.covert_value_to_hot_vec(goal)
-            goal_hot_vec = torch.FloatTensor(goal_hot_vec).to(self.device)
+                Goals.append(self.goal_space[goal.item()])
+                goal = torch.LongTensor(goal).unsqueeze(1).to(self.device)
 
             t_lower = 0
             ir = 0
@@ -766,7 +853,11 @@ class HRL_Discrete_Safe_Global_Constraint_Dual(object):
                 # print(torch.equal(state, previous_state), self.G.convert_hot_vec_to_value(state), self.G.convert_hot_vec_to_value(goal_hot_vec))
                 # print(self.dqn_lower(torch.cat((state, goal_hot_vec))), t_lower)
 
-                next_state, reward, done, info = self.eval_env.step(action.item())
+                if self.args.env_name == "grid_key":
+                    next_state, reward, done, info = self.env.step(action=action.item())
+                elif self.args.env_name == "four_rooms":
+                    next_state, reward, done, info = self.env.step(action=action)
+
                 ep_reward += reward
                 ep_len += 1
                 ep_constraint += info[self.cost_indicator]

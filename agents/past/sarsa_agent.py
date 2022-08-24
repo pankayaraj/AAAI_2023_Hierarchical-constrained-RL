@@ -46,7 +46,6 @@ class SarsaAgent(object):
         self.args = args
 
         self.state_dim = env.reset().shape
-
         self.action_dim = env.action_space.n
 
         self.device = torch.device("cuda" if (torch.cuda.is_available() and  self.args.gpu) else "cpu")
@@ -59,8 +58,8 @@ class SarsaAgent(object):
             torch.cuda.manual_seed(self.args.seed )
 
         self.writer = writer
-
-        if self.args.env_name == "grid" or self.args.env_name == "grid_key":
+        print(self.args.env_name)
+        if self.args.env_name == "grid" or self.args.env_name == "grid_key" or self.args.env_name == "four_rooms" or self.args.env_name == "puddle" :
             self.dqn = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
             self.dqn_target = OneHotDQN(self.state_dim, self.action_dim).to(self.device)
         else:
@@ -79,10 +78,9 @@ class SarsaAgent(object):
 
             return _thunk
 
-        envs = [make_env() for i in range(self.args.num_envs)]
-
-
-        self.envs = SubprocVecEnv(envs)
+        #envs = [make_env() for i in range(self.args.num_envs)]
+        #self.envs = SubprocVecEnv(envs)
+        self.env = env
 
         # create epsilon and beta schedule
         # NOTE: hardcoded for now
@@ -103,6 +101,10 @@ class SarsaAgent(object):
         self.cost_indicator = "none"
         if "grid" in self.args.env_name:
             self.cost_indicator = 'pit'
+        elif "four_rooms" in self.args.env_name:
+            self.cost_indicator = 'pit'
+        elif "puddle" in self.args.env_name:
+            self.cost_indicator = 'pit'
         else:
             raise Exception("not implemented yet")
 
@@ -116,10 +118,17 @@ class SarsaAgent(object):
         with torch.no_grad():
             # to take random action or not
             if (random.random() > self.eps_decay.value(self.total_steps)) or greedy_eval:
+                if state.shape[0] != 1:
+                    state = state.unsqueeze(0)
+
                 q_value = self.dqn(state)
 
                 # chose the max/greedy actions
-                action = q_value.max(1)[1].cpu().numpy()
+
+                action = np.array([q_value.max(1)[1].cpu().numpy()])
+                action = np.reshape(action,newshape = (self.args.num_envs, ))
+
+
             else:
                 action = np.random.randint(0, high=self.action_dim, size = (self.args.num_envs, ))
 
@@ -159,9 +168,6 @@ class SarsaAgent(object):
             'avg_train_constraint: {:.2f}\t'.format(np.mean(self.results_dict["train_constraints"][-100:]))
             )
 
-
-
-
     def run(self):
         """
         Learning happens here
@@ -172,7 +178,8 @@ class SarsaAgent(object):
 
         # reset state and env
         # reset exploration porcess
-        state = self.envs.reset()
+        #state = self.envs.reset()
+        state = self.env.reset()
         prev_state = state
 
         ep_reward = 0
@@ -205,24 +212,25 @@ class SarsaAgent(object):
 
                 # get the action
                 action = self.pi(state)
-                next_state, reward, done, info = self.envs.step(action)
+                next_state, reward, done, info = self.env.step(action) #self.envs.step(action)
 
                 # convert it back to tensor
                 action = torch.LongTensor(action).unsqueeze(1).to(self.device)
 
 
                 q_values = self.dqn(state)
-                Q_value = q_values.gather(1, action)
+                Q_value = q_values.gather(0, action[0])
 
                 # logging mode for only agent 1
-                ep_reward += reward[0]
-                ep_constraint += info[0][self.cost_indicator]
+                ep_reward += reward
+
+                ep_constraint += info[self.cost_indicator]
 
                 values.append(Q_value)
-                rewards.append(torch.FloatTensor(reward).unsqueeze(1).to(self.device))
-                done_masks.append(torch.FloatTensor(1 - done).unsqueeze(1).to(self.device))
-                begin_masks.append(torch.FloatTensor([ci['begin'] for ci in info]).unsqueeze(1).to(self.device))
-                constraints.append(torch.FloatTensor([ci[self.cost_indicator] for ci in info]).unsqueeze(1).to(self.device))
+                rewards.append(reward)
+                done_masks.append((1 - done))
+                begin_masks.append(info["begin"])
+                constraints.append(info[self.cost_indicator])
                 prev_states.append(prev_state)
                 states.append(state)
                 actions.append(action)
@@ -233,17 +241,18 @@ class SarsaAgent(object):
 
                 self.total_steps += (1 * self.args.num_envs)
 
-
                 # hack to reuse the same code
                 # iteratively add each done episode, so that can eval at regular interval
-                for _ in range(done.sum()):
-                    if done[0]:
-                        if self.num_episodes % self.args.log_every == 0:
-                            self.log_episode_stats(ep_reward, ep_constraint)
+                if done:
+                    if self.num_episodes % self.args.log_every == 0:
+                        self.log_episode_stats(ep_reward, ep_constraint)
 
-                        # reset the rewards anyways
-                        ep_reward = 0
-                        ep_constraint = 0
+                    # reset the rewards anyways
+                    ep_reward = 0
+                    ep_constraint = 0
+
+                    state = self.env.reset()  # reset
+                    state = torch.FloatTensor(state).to(device=self.device)
 
                     self.num_episodes += 1
 
@@ -278,17 +287,19 @@ class SarsaAgent(object):
 
 
 
+
             # break here
             if self.num_episodes >= self.args.num_episodes:
                 break
 
             # calculate targets here
             next_state = torch.FloatTensor(next_state).to(self.device)
+
             next_q_values = self.dqn(next_state)
             next_action = self.pi(next_state)
             next_action = torch.LongTensor(next_action).unsqueeze(1).to(self.device)
 
-            next_q_values = next_q_values.gather(1, next_action)
+            next_q_values = next_q_values.gather(0,next_action[0])
 
 
             # calculate targets
@@ -319,10 +330,13 @@ class SarsaAgent(object):
         avg_reward = []
         avg_constraint = []
 
+        CS = []
+
         with torch.no_grad():
             for _ in range(self.args.eval_n):
 
                 state = self.eval_env.reset()
+                #print(state, self.eval_env.start, self.eval_env.goal)
                 done = False
                 ep_reward = 0
                 ep_constraint = 0
@@ -335,8 +349,7 @@ class SarsaAgent(object):
                     state_tensor =  torch.FloatTensor(state).to(self.device).unsqueeze(0)
 
                     # get the policy action
-                    action = self.pi(state_tensor, greedy_eval=True)[0]
-
+                    action = self.pi(state_tensor, greedy_eval=True)
                     next_state, reward, done, info = self.eval_env.step(action)
                     ep_reward += reward
                     ep_len += 1
@@ -345,9 +358,13 @@ class SarsaAgent(object):
                     # update the state
                     state = next_state
 
+                    CS.append(next_state)
+
 
                 avg_reward.append(ep_reward)
                 avg_constraint.append(ep_constraint)
+
+        print(CS)
 
         return np.mean(avg_reward), np.mean(avg_constraint)
 

@@ -190,6 +190,7 @@ class PitWorld_Key(gym.Env):
         else:
             obs = obs[AGENT].flatten()
 
+
         return obs
 
 
@@ -246,28 +247,90 @@ class PitWorld_Key(gym.Env):
 
         my = self.maze.shape[1]
         mx = self.maze.shape[2]
+
+        maze_grid = [[0 for _ in range(mx)] for __ in range(my)]
+
         str = ''
         for y in range(my):
             for x in range(mx):
                 if self.maze[BLOCK][y][x] == 1:
+                    maze_grid[y][x] = 0
                     str += '  #'
                 elif self.maze[AGENT][y][x] == 1:
                     str += '  A'
+                    maze_grid[y][x] = 1
                 elif self.maze[GOAL][y][x] == 1:
                     str += '  G'
+                    maze_grid[y][x] = 2
                 elif self.maze[PIT][y][x] == 1:
                     str += '  x'
+                    maze_grid[y][x] = 3
                 elif self.maze[KEY][y][x] == 1:
                     str += '  K'
+                    maze_grid[y][x] = 4
                 elif goal_space != None:
                     if SUB_G[y][x] == 1:
                         str += '  S'
+                        maze_grid[y][x] = 5
                     else:
                         str += '   '
+                        maze_grid[y][x] = 6
                 else:
                     str += '   '
+                    maze_grid[y][x] = 6
             str += '\n'
         return str
+
+    def get_grid(self, goal_space = None):
+        # here goal space is given as a list of integer values as done in the arguments. This it is converted into coordinates as done int \ours\grid\utils.py
+        SUB_G = np.zeros((self.size, self.size))
+        if goal_space != None:
+            g_s_x = []
+            g_s_y = []
+
+            for i in goal_space:
+                g_s_x.append((i) % self.size)
+                g_s_y.append((i) // self.size)
+
+            for j in range(len(goal_space)):
+                SUB_G[g_s_y[j]][g_s_x[j]] = 1
+
+        my = self.maze.shape[1]
+        mx = self.maze.shape[2]
+
+        maze_grid = [[0 for _ in range(mx)] for __ in range(my)]
+
+        str = ''
+        for y in range(my):
+            for x in range(mx):
+                if self.maze[BLOCK][y][x] == 1:
+                    maze_grid[y][x] = 0
+                    str += '  #'
+                elif self.maze[AGENT][y][x] == 1:
+                    str += '  A'
+                    maze_grid[y][x] = 1
+                elif self.maze[GOAL][y][x] == 1:
+                    str += '  G'
+                    maze_grid[y][x] = 2
+                elif self.maze[PIT][y][x] == 1:
+                    str += '  x'
+                    maze_grid[y][x] = 3
+                elif self.maze[KEY][y][x] == 1:
+                    str += '  K'
+                    maze_grid[y][x] = 4
+                elif goal_space != None:
+                    if SUB_G[y][x] == 1:
+                        str += '  S'
+                        maze_grid[y][x] = 5
+                    else:
+                        str += '   '
+                        maze_grid[y][x] = 6
+                else:
+                    str += '   '
+                    maze_grid[y][x] = 6
+            str += '\n'
+
+        return maze_grid
 
 
     def is_reachable(self, y, x):
@@ -299,6 +362,8 @@ class PitWorld_Key(gym.Env):
         return True
 
     def step(self, action):
+        if type(action) == np.ndarray:
+            action = action.item()
 
         assert self.action_space.contains(action)
         # assert self.done is False

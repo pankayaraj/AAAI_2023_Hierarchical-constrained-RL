@@ -106,6 +106,7 @@ class OneHotDQN(nn.Module):
         )
 
     def forward(self, x):
+
         q_vals = self.q_layer(x)
         return q_vals
 

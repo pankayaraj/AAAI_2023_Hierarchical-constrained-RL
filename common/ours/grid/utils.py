@@ -49,6 +49,7 @@ class Goal_Space():
 
     def validate_done(self, current_state):
         current_value = torch.argmax(current_state).item()
+
         if current_value in self.goal_space:
             return True
         else:
@@ -63,12 +64,40 @@ class Goal_Space():
         current_value = torch.argmax(current_state).item()
         goal_value = torch.argmax(goal_state).item()
 
+
         #print(current_value, goal_value)
         if self.intrinsic_reward_type == "eculidian distance":
             f = euclidian_distance(current_value, goal_value, self.grid_size)
             return -f
         else:
             raise Exception("Not Implemented")
+
+    def intrinsic_reward_FR_CG(self,env, done_l, current_state, goal_state):
+
+        if type(current_state) != torch.Tensor:
+            current_state = torch.Tensor(current_state)
+        if type(goal_state) != torch.Tensor:
+            goal_state = torch.Tensor(goal_state)
+
+        current_value = torch.argmax(current_state).item()
+        goal_value = torch.argmax(goal_state).item()
+
+        current_cell = env.tocell[current_value]
+        goal_cell = env.tocell[goal_value]
+
+        x1, y1 = current_cell
+        x2, y2 = goal_cell
+        distance = (x1-x2)**2 + (y1-y2)**2
+
+        if done_l:
+            reward = 1000
+        else:
+            reward = -sqrt(distance)
+
+        return reward
+
+
+
 
     def action_to_goal(self, action):
         #get the corresponding goal for the discrete action
@@ -79,6 +108,7 @@ class Goal_Space():
             current_state = torch.Tensor(current_state)
         if type(goal_state) != torch.Tensor:
             goal_state = torch.Tensor(goal_state)
+
 
 
 
