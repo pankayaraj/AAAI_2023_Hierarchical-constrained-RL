@@ -335,6 +335,8 @@ ax2.set_title("Constraint comparision with a constriant limit of 30", size=90)
 ax2.set_xlabel('No of episodes X1000', size=90)
 ax2.set_ylabel("Constraints", size=90)
 
+
+
 ines_labels = [ax1.get_legend_handles_labels(), ax2.get_legend_handles_labels()]
 lines, labels = [sum(lol, []) for lol in zip(*ines_labels)]
 unique = [(h, l) for i, (h, l) in enumerate(zip(lines, labels)) if l not in labels[:i]]

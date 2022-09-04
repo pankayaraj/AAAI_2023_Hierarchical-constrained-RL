@@ -1,5 +1,5 @@
 import argparse
-
+import numpy as np
 
 def get_args():
     """
@@ -16,6 +16,8 @@ def get_args():
 
     parser.add_argument('--save_dir', type=str, default="results/puddle/lyp_sarsa/")
     parser.add_argument('--exp_no', type=str, default="6")
+
+
 
     parser.add_argument("--goal_space", type=list, default=[[0.75,0.3],[0.9,0.9],[0.5,0.7],[0.1, 1.0]])   #this is for discrete goal setting in an HRL setup
     #GRID
